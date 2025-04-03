@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+
+# Project specific
+outputs/
+checkpoints/
+book_generation_checkpoint.pkl
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Generated book files in processed_book directory
+processed_book/
+*.pdf
+*.epub
+*.html 

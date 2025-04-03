@@ -1,0 +1,11 @@
+google-generativeai>=0.3.0
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+loguru>=0.7.2
+pathlib>=1.0.1
+pillow>=10.0.0
+requests>=2.31.0
+reportlab>=4.0.4
+ebooklib>=0.18
+beautifulsoup4>=4.12.2
+html2text>=2020.1.16 
