@@ -25,26 +25,16 @@ class TextOverlayManager:
                 "text_area_height_factor": 0.35, 
                 "background_color": (255, 255, 255, 215),  # Slightly more transparent white background (was 230)
                 "padding": 25  
-            },
-            "title": {
-                "font": "assets/fonts/children_book.ttf",
-                "size": 70,  # Slightly reduced title size
-                "color": (16, 69, 153),
-                "stroke_width": 2,
-                "stroke_fill": (255, 255, 255),
-                "text_area_height_factor": 0.35,  # Match story height
-                "background_color": (255, 255, 255, 230),
-                "padding": 35
             }
         }
         
         # Add a default cover style (can be customized further)
         styles["cover"] = {
-            "font": styles["title"]["font"], # Use title font by default (Consider a different cover font?)
+            "font": "assets/fonts/children_book.ttf", # Use same font as story
             "size": 90,  # Larger size for cover title/author
-            "color": (255, 255, 255), # White text often works well on covers
-            "stroke_width": 4, # Slightly thicker stroke for visibility
-            "stroke_fill": (0, 0, 0), # Black stroke for contrast
+            "color": (0, 0, 0), # Changed to black to match story text
+            "stroke_width": 3, # Match story text stroke width
+            "stroke_fill": (255, 255, 255), # White stroke for contrast, matching story text
             "text_area_height_factor": 0.4, # Less relevant without background
             "background_color": None, # REMOVED background panel
             "padding": 10 # Less relevant without background

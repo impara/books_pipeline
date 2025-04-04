@@ -28,6 +28,7 @@ characters:
     persistent_appearance:
       - "Hair is always wavy brown."
       - "Always wears comfortable brown sandals."
+      - "backpack color is always blue."
       # Add other core, unchanging features here (e.g., backpack color)
       # - "Always wears a [COLOR] backpack."
     # Appearance rules specific to story phases/scenes (optional)
@@ -448,10 +449,6 @@ visual_transitions:
   7_to_8: "the tension of rescue transitioning to a jubilant celebration"
   8_to_9: "the joyous moment giving way to a gentle farewell"
   9_to_10: "the enchanted meadow softly merging into the familiar warmth of home"
-
-api:
-  debug:
-    verbose_level: 2 
 
 magical_guidance:
   start_page: 3
