@@ -18,13 +18,13 @@ class TextOverlayManager:
         styles = {
             "story": {
                 "font": "assets/fonts/children_book.ttf",
-                "size": 55,  # Reduced size for better fit
-                "color": (16, 69, 153),  # Deep blue color
-                "stroke_width": 2,  # Thinner stroke for cleaner look
+                "size": 55,  # Keep original size
+                "color": (0, 0, 0),  # Black text for strong contrast
+                "stroke_width": 3,  # Increased stroke for better definition
                 "stroke_fill": (255, 255, 255),  # White outline
-                "text_area_height_factor": 0.35,  # Significantly increased height for text area
-                "background_color": (255, 255, 255, 230),  # More opaque white background
-                "padding": 25  # Reduced padding
+                "text_area_height_factor": 0.35, 
+                "background_color": (255, 255, 255, 215),  # Slightly more transparent white background (was 230)
+                "padding": 25  
             },
             "title": {
                 "font": "assets/fonts/children_book.ttf",
@@ -38,6 +38,18 @@ class TextOverlayManager:
             }
         }
         
+        # Add a default cover style (can be customized further)
+        styles["cover"] = {
+            "font": styles["title"]["font"], # Use title font by default (Consider a different cover font?)
+            "size": 90,  # Larger size for cover title/author
+            "color": (255, 255, 255), # White text often works well on covers
+            "stroke_width": 4, # Slightly thicker stroke for visibility
+            "stroke_fill": (0, 0, 0), # Black stroke for contrast
+            "text_area_height_factor": 0.4, # Less relevant without background
+            "background_color": None, # REMOVED background panel
+            "padding": 10 # Less relevant without background
+        }
+
         self._ensure_fonts_available()
         return styles
     
@@ -81,7 +93,7 @@ class TextOverlayManager:
         for style in self.text_styles.values():
             style["font"] = default_font
 
-    def apply_text_overlay(self, image_path, text, page_number, is_final=False, position="bottom"):
+    def apply_text_overlay(self, image_path, text, page_number, is_final=False, position="bottom", is_cover=False):
         """Apply text overlay with background panel.
         
         Args:
@@ -90,6 +102,7 @@ class TextOverlayManager:
             page_number: Page number
             is_final: Whether this is the final version for the processed book
             position: Text position ("top", "middle", or "bottom", default: "bottom")
+            is_cover: Whether this is the cover page (uses different styling)
         """
         try:
             # Open the image
@@ -110,9 +123,15 @@ class TextOverlayManager:
             
             width, height = image.size
             
-            # Choose style based on page type
-            style_name = "title" if page_number == 1 else "story"
-            style = self.text_styles[style_name]
+            # Choose style based on page type or if it's a cover
+            if is_cover:
+                style_name = "cover"
+                logger.info(f"Applying cover-specific text style for image: {os.path.basename(image_path)}")
+            else:
+                # Default to story style for all non-cover pages
+                style_name = "story"
+                
+            style = self.text_styles.get(style_name, self.text_styles["story"]) # Fallback to story style
             
             # Calculate text area dimensions
             text_area_height = int(height * style["text_area_height_factor"])
@@ -164,19 +183,34 @@ class TextOverlayManager:
             rect_x = (width - rect_width) // 2
             rect_y = (text_area.height - rect_height) // 2
             
-            # Draw rounded rectangle background
-            radius = 20
-            background_color = style["background_color"]
-            self._draw_rounded_rectangle(
-                draw,
-                (rect_x, rect_y, rect_x + rect_width, rect_y + rect_height),
-                radius,
-                background_color
-            )
-            
+            # Draw rounded rectangle background ONLY if color is specified
+            background_color = style.get("background_color") # Use .get() for safety
+            if background_color:
+                radius = 20
+                self._draw_rounded_rectangle(
+                    draw,
+                    (rect_x, rect_y, rect_x + rect_width, rect_y + rect_height),
+                    radius,
+                    background_color
+                )
+            else:
+                # If no background, text starts relative to text_area, not the (non-existent) rect
+                # Center text horizontally, adjust vertical start position
+                text_x = width // 2 
+                # We need to calculate the total text block height again to center it vertically in the text_area
+                actual_text_block_height = text_height # From previous calculation
+                current_y = (text_area.height - actual_text_block_height) // 2
+
             # Draw Wrapped Text
-            text_x = width // 2
-            current_y = rect_y + padding
+            # If background exists, text_x/current_y relative to rect. If not, relative to text_area.
+            if not background_color:
+                 # Recalculate starting Y pos if no background panel
+                 actual_text_block_height = text_height # From previous calculation
+                 current_y = (text_area.height - actual_text_block_height) / 2
+            else:
+                # Original positioning relative to background rect
+                text_x = width // 2 # Already centered relative to page
+                current_y = rect_y + padding
             
             # Draw text with improved spacing
             for line in lines:
@@ -230,7 +264,7 @@ class TextOverlayManager:
             
             # Save the result
             result.save(image_path)
-            logger.info(f"Applied text overlay to page {page_number} at {position}")
+            logger.info(f"Applied text overlay to {'cover' if is_cover else f'page {page_number}'} at {position}")
             
         except Exception as e:
             logger.error(f"Error applying text overlay to page {page_number}: {str(e)}")

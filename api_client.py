@@ -287,29 +287,46 @@ class APIClient:
         else:
             return "", False
 
-    def generate_image(self, prompt_text: str, safety_settings: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-        """Generate an image using the Gemini API.
+    def generate_image(self, prompt_text: str, safety_settings: Optional[List[Dict[str, str]]] = None, reference_image_b64: Optional[str] = None, page_number: Optional[int] = None) -> Optional[List[str]]:
+        """Generate an image using the Gemini API, optionally with a reference image.
         
         Args:
             prompt_text: The prompt text for image generation
             safety_settings: Optional safety settings for content filtering
+            reference_image_b64: Optional base64 encoded string of the reference image (PNG format expected)
+            page_number: Optional page number for logging/debugging purposes
             
         Returns:
-            Dict containing the API response with base64-encoded image
+            List of base64-encoded image strings, or None if generation fails.
         """
-        # Prepare the data for the API request
+        logger.info(f"Generating image (Page: {page_number if page_number is not None else 'N/A'}) - Ref Image: {'Yes' if reference_image_b64 else 'No'}")
+
+        # Prepare the parts for the API request contents
+        parts = []
+        # Add the text prompt first
+        parts.append({"text": prompt_text})
+        
+        # Add the reference image if provided
+        if reference_image_b64:
+            logger.debug(f"Adding reference image data (length: {len(reference_image_b64)}) to request parts.")
+            parts.append({
+                "inlineData": {
+                    "mimeType": "image/png", # Assuming PNG reference images
+                    "data": reference_image_b64
+                }
+            })
+        
+        # Prepare the data payload
         data = {
             "contents": [{
                 "role": "user",
-                "parts": [{
-                    "text": prompt_text
-                }]
+                "parts": parts # Use the dynamically created parts list
             }],
             "generationConfig": {
-                "temperature": 0.4,
+                "temperature": 0.4, # TODO: Consider making these configurable
                 "top_p": 1,
                 "top_k": 32,
-                "responseModalities": ["Text", "Image"]  # Include both text and image modalities
+                "responseModalities": ["Text", "Image"] # Expect both back
             }
         }
         
@@ -317,35 +334,59 @@ class APIClient:
         if safety_settings:
             data["safetySettings"] = safety_settings
         
-        # Use the model from environment variables
+        # Attempt with primary model
         url = self.get_api_url(self.model)
         try:
             response = self.make_request(url, data)
-            if self._has_valid_image(response):
-                return response
+            images = self._extract_images_from_response(response)
+            if images:
+                logger.info(f"Successfully generated image using primary model: {self.model}")
+                return images
             
-            # If primary model fails, try fallback
-            logger.info("Primary model failed to generate image, trying fallback model")
+            # If primary model fails or returns no valid image, try fallback
+            logger.warning(f"Primary model ({self.model}) failed to return a valid image. Trying fallback: {self.fallback_model}")
             url = self.get_api_url(self.fallback_model)
             
-            # Ensure fallback request has the correct responseModalities
-            data["generationConfig"]["responseModalities"] = ["Text", "Image"]
-            
-            return self.make_request(url, data)
+            # Ensure fallback request still has the correct parts and config
+            # (Data dict is already prepared correctly above)
+            response = self.make_request(url, data)
+            images = self._extract_images_from_response(response)
+            if images:
+                 logger.info(f"Successfully generated image using fallback model: {self.fallback_model}")
+                 return images
+            else:
+                logger.error(f"Fallback model ({self.fallback_model}) also failed to return a valid image.")
+                return None # Return None if both fail
             
         except Exception as e:
-            logger.error(f"Image generation failed: {str(e)}")
-            raise
+            logger.error(f"Image generation failed critically: {str(e)}")
+            # Optionally, re-raise the exception if needed upstream
+            # raise e 
+            return None # Return None on critical failure
 
-    def _has_valid_image(self, response: Dict[str, Any]) -> bool:
-        """Check if the response contains a valid image."""
+    def _extract_images_from_response(self, response: Optional[Dict[str, Any]]) -> Optional[List[str]]:
+        """Extracts base64 image data from the API response."""
         if not response or 'candidates' not in response:
-            return False
+            logger.warning("No candidates found in image generation response.")
+            return None
             
+        images = []
         for candidate in response['candidates']:
             content = candidate.get('content', {})
             for part in content.get('parts', []):
                 if 'inlineData' in part and part['inlineData'].get('mimeType', '').startswith('image/'):
-                    if len(part['inlineData'].get('data', '')) > 0:
-                        return True
-        return False 
+                    image_data = part['inlineData'].get('data')
+                    if image_data and isinstance(image_data, str) and len(image_data) > 100: # Basic check for non-empty image data
+                        images.append(image_data)
+                    else:
+                        logger.warning(f"Found image part but data seems invalid or empty. MimeType: {part['inlineData'].get('mimeType')}, Data Length: {len(image_data) if image_data else 0}")
+
+        if not images:
+            logger.warning("No valid image data found in any response candidates.")
+            return None
+            
+        logger.debug(f"Extracted {len(images)} valid image(s) from response.")
+        return images
+
+    # Renamed from _has_valid_image to reflect it now extracts data
+    # def _has_valid_image(self, response: Dict[str, Any]) -> bool: ... (Old function removed) 

@@ -701,57 +701,53 @@ ONLY provide the exact text for the page - no additional commentary or descripti
         return "\n".join(scene_analysis_parts)
         
     def _build_character_instructions(self, required_characters: List[dict]) -> str:
-        """Build detailed character placement instructions for the image prompt."""
-        if not required_characters:
-            return "No characters in this scene."
+        """Build detailed character instructions including persistent rules."""
+        instructions = []
+        char_names = set() # To prevent duplicates if config is messy
         
-        character_details = []
-        
-        for char in required_characters:
-            char_name = char['name']
-            
-            # Basic character info
-            details = [
-                f"Character: {char_name}",
-                f"Description: {char.get('description', 'No description available')}"
+        for i, char in enumerate(required_characters):
+            char_name = char.get('name')
+            if not char_name or char_name in char_names:
+                continue # Skip if no name or already processed
+            char_names.add(char_name)
+
+            char_details = [
+                f"{i+1}. Character: {char_name} | Description: {char.get('description', 'N/A')}"
             ]
             
-            # Add appearance details if available
-            if 'appearance' in char:
-                details.append(f"Appearance: {char['appearance']}")
-            if 'outfit' in char:
-                details.append(f"Outfit: {char['outfit']}")
-            if 'features' in char:
-                details.append(f"Features: {char['features']}")
-                
-            # Add action if available
-            if 'action' in char:
-                details.append(f"Action: {char['action']}")
-                
-            # Add emotion if available
-            if 'emotion' in char:
-                details.append(f"Emotion: {char['emotion']}")
-                
-            # Add clear uniqueness requirement
-            details.append("IMPORTANT: This character must appear EXACTLY ONCE in the scene")
-                
-            character_details.append(" | ".join(details))
+            # Add standard appearance attributes if they exist
+            for attr in ['appearance', 'outfit', 'features']:
+                if value := char.get(attr):
+                    char_details.append(f"   | {attr.capitalize()}: {value}")
+
+            # --- Add Persistent Appearance Rules --- #
+            # Find the character config data
+            char_config_data = None
+            for cfg_type, cfg_info in self.config.get('characters', {}).items():
+                if cfg_info.get('name') == char_name:
+                    char_config_data = cfg_info
+                    break
             
-        # Calculate total character count for extra emphasis
-        total_characters = len(required_characters)
-        
-        # Add an explicit count at the beginning
-        character_text = [
-            f"TOTAL CHARACTERS: EXACTLY {total_characters}",
-            f"Each character below must appear EXACTLY ONCE:",
-            ""
-        ]
-        
-        # Add numbered character details
-        for idx, details in enumerate(character_details, 1):
-            character_text.append(f"{idx}. {details}")
+            if char_config_data and 'persistent_appearance' in char_config_data:
+                persistent_rules = char_config_data['persistent_appearance']
+                if persistent_rules and isinstance(persistent_rules, list):
+                    char_details.append("   | PERSISTENT RULES (MUST FOLLOW):")
+                    for rule in persistent_rules:
+                        char_details.append(f"     - {rule}")
+            # --- End Persistent Rules --- #
+
+            # Add action and emotion
+            if action := char.get('action'):
+                char_details.append(f"   | Action: {action}")
+            if emotion := char.get('emotion'):
+                char_details.append(f"   | Emotion: {emotion}")
+            else:
+                 char_details.append(f"   | Emotion: None") # Explicitly state None if not specified
+                 
+            char_details.append("   | IMPORTANT: This character must appear EXACTLY ONCE in the scene")
+            instructions.append("\n".join(char_details))
             
-        return "\n".join(character_text)
+        return "\n\n".join(instructions)
         
     def _get_anti_duplication_rules(self, num_characters: int, required_characters: List[dict] = None) -> str:
         """Get anti-duplication rules from config and format them."""
@@ -924,10 +920,17 @@ ONLY provide the exact text for the page - no additional commentary or descripti
                     time.sleep(8)  # Increased delay to further reduce rate limit issues
             
             logger.info("Book generation completed!")
+
+            # Generate the cover image
+            self.generate_cover()
             
             # Create a final book PDF or HTML file
             self._create_final_book()
             
+            # If print settings are configured, calculate and log spine width for KDP Cover Creator
+            if self.config.get('print_settings'):
+                BookFormatter.calculate_and_log_spine_width(self.config)
+
             # Mark book generation as complete
             self.checkpoint_manager.mark_as_complete()
             
@@ -1038,180 +1041,7 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             self.original_image_files = original_image_files
             raise
 
-    def _generate_page_description(self, page_number: int, text: str) -> str:
-        """Generate a description for the page using the Gemini model."""
-        try:
-            # Get all relevant information from scene_manager to avoid duplication
-            scene_requirements = self.scene_manager.get_scene_requirements(page_number, text)
-            story_actions = self.scene_manager.extract_story_specific_actions(page_number, text)
-            new_characters = self.scene_manager.detect_new_characters(page_number, text)
-            
-            # Build character actions for each character
-            character_actions = []
-            for char_type, char_data in self.config['characters'].items():
-                char_name = char_data['name']
-                action = self.scene_manager.get_character_action(char_name, page_number, text)
-                if action:
-                    character_actions.append(f"{char_name}: {action}")
-            
-            # Format scene requirements for the prompt
-            formatted_scene = []
-            for key, value in scene_requirements.items():
-                if isinstance(value, list):
-                    formatted_scene.append(f"- {key}: " + ", ".join(value))
-                else:
-                    formatted_scene.append(f"- {key}: {value}")
-            
-            # Prepare the prompt
-            prompt = f"""Generate a detailed image description for page {page_number} of a children's book.
-
-Story text for this page:
-{text}
-
-Scene requirements:
-{chr(10).join(formatted_scene)}
-
-Character actions:
-{chr(10).join(character_actions)}
-
-Story-specific actions:
-{story_actions}
-
-New characters in this page:
-{', '.join(new_characters) if new_characters else 'None'}
-
-Previous pages completed: {sorted(list(self.completed_pages))}
-Pages with images: {sorted(list(self.pages_with_images))}
-
-Previous descriptions:
-{self._format_previous_descriptions()}
-
-Requirements:
-1. Create a detailed, child-friendly scene description
-2. Focus on visual elements and actions
-3. Maintain consistency with previous pages
-4. Include all required characters and their actions
-5. Follow the scene requirements
-6. Ensure the scene is appropriate for children
-
-The description should be detailed enough for an AI image generation model to create an appropriate illustration."""
-
-            # Generate the description
-            response, success = self.api_client.generate_story_text(prompt)
-            
-            if success:
-                return response
-            
-            return ""
-            
-        except Exception as e:
-            logger.error(f"Error generating page description: {str(e)}")
-            return ""
-            
-    def _format_previous_descriptions(self):
-        """Helper method to format previous descriptions for prompts."""
-        formatted = []
-        # Get up to the last 3 pages for context
-        prev_pages = sorted([p for p in self.previous_descriptions.keys()])[-3:]
-        for p in prev_pages:
-            formatted.append(f"Page {p}: {self.previous_descriptions[p][:150]}...")
-        return "\n".join(formatted)
-
-    def generate_image_prompt(self, page_number: int, scene_requirements: dict, reference_image: str = None) -> str:
-        """Generate a detailed prompt for image generation with transition and reference handling."""
-        prompt_parts = []
-        
-        # Add base scene description
-        prompt_parts.append(scene_requirements.get('description', ''))
-        
-        # Add atmosphere and mood
-        if atmosphere := scene_requirements.get('atmosphere'):
-            prompt_parts.append(f"The atmosphere is {atmosphere}.")
-        
-        # Add required elements
-        if elements := scene_requirements.get('elements'):
-            prompt_parts.append("The scene includes: " + ", ".join(elements))
-        
-        # Handle transitions if present
-        if transition_reqs := scene_requirements.get('transition_requirements'):
-            prompt_parts.append(self._generate_transition_prompt(transition_reqs))
-        
-        # Handle reference image requirements
-        if reference_image and (ref_handling := scene_requirements.get('reference_handling')):
-            prompt_parts.append(self._generate_reference_prompt(ref_handling))
-        
-        # Add style requirements
-        prompt_parts.append(self._generate_style_requirements(scene_requirements))
-        
-        return " ".join(prompt_parts)
-
-    def _generate_transition_prompt(self, transition_reqs: dict) -> str:
-        """Generate the transition-specific part of the prompt."""
-        transition_parts = []
-        
-        # Add composition guidance
-        if composition := transition_reqs.get('composition_guide'):
-            transition_parts.append(f"Composition: {composition}.")
-        
-        # Add emphasis
-        if emphasis := transition_reqs.get('emphasis'):
-            transition_parts.append(f"Emphasize the {emphasis} environment.")
-        
-        # Handle elements
-        if ref_handling := transition_reqs.get('reference_handling', {}):
-            # Elements to maintain
-            if maintain := ref_handling.get('maintain'):
-                transition_parts.append(
-                    "Maintain consistent appearance of: " + ", ".join(maintain)
-                )
-            
-            # Elements to phase out
-            if phase_out := ref_handling.get('phase_out'):
-                transition_parts.append(
-                    "Gradually phase out: " + ", ".join(phase_out)
-                )
-            
-            # New elements to introduce
-            if introduce := ref_handling.get('introduce'):
-                transition_parts.append(
-                    "Introduce new elements: " + ", ".join(introduce)
-                )
-        
-        # Add specific transition guidance
-        if style := transition_reqs.get('transition_style'):
-            transition_parts.append(style)
-        
-        if lighting := transition_reqs.get('lighting_guidance'):
-            transition_parts.append(lighting)
-        
-        return " ".join(transition_parts)
-
-    def _generate_reference_prompt(self, ref_handling: dict) -> str:
-        """Generate the reference-specific part of the prompt."""
-        ref_parts = []
-        
-        # Elements to maintain from reference
-        if maintain := ref_handling.get('maintain'):
-            ref_parts.append(
-                "From the reference image, maintain: " + ", ".join(maintain)
-            )
-        
-        # Elements to adapt
-        if adapt := ref_handling.get('adapt'):
-            ref_parts.append(
-                "Adapt the following elements to the current scene: " + ", ".join(adapt)
-            )
-        
-        # Elements to ignore
-        if ignore := ref_handling.get('ignore'):
-            ref_parts.append(
-                "Ignore the following elements from the reference: " + ", ".join(ignore)
-            )
-        
-        return " ".join(ref_parts)
-
     def _generate_style_requirements(self, scene_requirements: dict) -> str:
-        """Generate the style-specific part of the prompt."""
         style_parts = []
         
         # Add art style
@@ -1228,10 +1058,10 @@ The description should be detailed enough for an AI image generation model to cr
         
         return " ".join(style_parts)
 
-    def _process_and_save_images(self, response: dict, page_number: int, text: str) -> int:
-        """Process and save images from the API response."""
-        if not response or 'candidates' not in response:
-            logger.warning("No candidates in response")
+    def _process_and_save_images(self, image_data_list: Optional[List[str]], page_number: int, text: str) -> int:
+        """Process and save images from a list of base64 encoded strings."""
+        if not image_data_list:
+            logger.warning(f"No image data list provided for page {page_number}.")
             return 0
             
         image_count = 0
@@ -1248,174 +1078,106 @@ The description should be detailed enough for an AI image generation model to cr
         smart_crop = image_settings.get('smart_crop', False)
         bg_color = image_settings.get('background_color', 'white')
         
-        # Get debug settings from config
-        debug_config = self.config.get('api', {}).get('debug', {})
-        enable_response_debugging = debug_config.get('enable_response_debugging', False)
-        verbose_level = debug_config.get('verbose_level', 1)
-        
-        # Flag to track if any image data was found in the response
-        image_data_found = False
-        
-        # Detailed debugging of candidates if enabled
-        if enable_response_debugging and verbose_level >= 1:
-            logger.info(f"===== IMAGE GENERATION DEBUGGING (PAGE {page_number}) =====")
-            logger.info(f"Candidates count: {len(response.get('candidates', []))}")
-            
-            # Check response structure
-            response_keys = list(response.keys())
-            logger.info(f"Response contains keys: {response_keys}")
-            
-            # Check for usage info
-            if 'usageMetadata' in response:
-                logger.info(f"Usage metadata: {response['usageMetadata']}")
-            
-            # Advanced candidate debugging with parts count
-            for idx, candidate in enumerate(response.get('candidates', [])):
-                content = candidate.get('content', {})
-                parts = content.get('parts', [])
-                logger.info(f"Candidate {idx+1} has {len(parts)} parts")
+        for idx, image_data_base64 in enumerate(image_data_list, 1):
+            if not image_data_base64 or len(image_data_base64) < 100: # Basic check
+                logger.warning(f"Skipping invalid or empty image data string for image {idx} on page {page_number}.")
+                continue
+
+            try:
+                # Decode base64 image
+                image_data = base64.b64decode(image_data_base64)
                 
-                # Check part types
-                part_types = [list(p.keys()) for p in parts]
-                logger.info(f"Part types: {part_types}")
+                # Open and process image
+                img = Image.open(BytesIO(image_data))
+                logger.debug(f"Loaded image {idx} for page {page_number}: format={img.format}, mode={img.mode}, size={img.size}")
                 
-                # Check for image mime types
-                image_parts = [p for p in parts if 'inlineData' in p and p['inlineData'].get('mimeType', '').startswith('image/')]
-                logger.info(f"Image parts found: {len(image_parts)}")
+                # Convert to RGB if needed
+                if img.mode != image_format:
+                    img = img.convert(image_format)
                 
-                # Check model info
-                if 'modelId' in candidate:
-                    logger.info(f"Model ID: {candidate.get('modelId')}")
+                # Calculate dimensions while maintaining aspect ratio if required
+                if maintain_aspect and not smart_crop:
+                    # Create a blank background image
+                    background = Image.new(image_format, (target_width, target_height), bg_color)
                     
-                # Check finish reason
-                if 'finishReason' in candidate:
-                    logger.info(f"Finish reason: {candidate.get('finishReason')}")
-                    if candidate.get('finishReason') == 'SAFETY':
-                        logger.warning("Image generation was blocked due to safety concerns")
-                        
-                # Check safety ratings
-                if 'safetyRatings' in candidate:
-                    safety_issues = [f"{r.get('category')}: {r.get('probability')}" for r in candidate.get('safetyRatings', [])]
-                    logger.info(f"Safety ratings: {safety_issues}")
-        
-        for idx, candidate in enumerate(response['candidates'], 1):
-            # Look for image parts in the response
-            for part in candidate.get('content', {}).get('parts', []):
-                if 'inlineData' in part and part['inlineData'].get('mimeType', '').startswith('image/'):
-                    image_data_found = True
-                    data_length = len(part['inlineData'].get('data', ''))
+                    # Calculate scaling factor to fit within target dimensions
+                    width_ratio = target_width / img.width if img.width > 0 else 1
+                    height_ratio = target_height / img.height if img.height > 0 else 1
+                    scale_factor = min(width_ratio, height_ratio)
                     
-                    if enable_response_debugging and verbose_level >= 1:
-                        logger.info(f"Processing image data part with mime type: {part['inlineData'].get('mimeType')}")
-                        logger.info(f"Image data length: {data_length} bytes")
+                    # Calculate new dimensions
+                    new_width = int(img.width * scale_factor)
+                    new_height = int(img.height * scale_factor)
                     
-                    # Skip if no data
-                    if not data_length:
-                        logger.error(f"Empty image data found with mime type: {part['inlineData'].get('mimeType')}")
-                        continue
+                    # Resize image
+                    img_resized = img.resize((new_width, new_height), resize_method)
                     
-                    try:
-                        # Decode base64 image
-                        image_data = base64.b64decode(part['inlineData']['data'])
-                        
-                        if enable_response_debugging and verbose_level >= 2:
-                            logger.info(f"Successfully decoded base64 data, raw size: {len(image_data)} bytes")
-                        
-                        # Open and process image
-                        img = Image.open(BytesIO(image_data))
-                        
-                        if enable_response_debugging and verbose_level >= 1:
-                            logger.info(f"Loaded image: format={img.format}, mode={img.mode}, size={img.size}")
-                        
-                        # Convert to RGB if needed
-                        if img.mode != image_format:
-                            img = img.convert(image_format)
-                        
-                        # Calculate dimensions while maintaining aspect ratio if required
-                        if maintain_aspect and not smart_crop:
-                            # Create a blank background image
-                            background = Image.new(image_format, (target_width, target_height), bg_color)
-                            
-                            # Calculate scaling factor to fit within target dimensions
-                            width_ratio = target_width / img.width
-                            height_ratio = target_height / img.height
-                            scale_factor = min(width_ratio, height_ratio)
-                            
-                            # Calculate new dimensions
-                            new_width = int(img.width * scale_factor)
-                            new_height = int(img.height * scale_factor)
-                            
-                            # Resize image
-                            img = img.resize((new_width, new_height), resize_method)
-                            
-                            # Calculate position to center the image
-                            x = (target_width - new_width) // 2
-                            y = (target_height - new_height) // 2
-                            
-                            # Paste resized image onto background
-                            background.paste(img, (x, y))
-                            img = background
-                        elif maintain_aspect and smart_crop:
-                            # Smart crop: resize to fill the canvas completely and crop excess
-                            width_ratio = target_width / img.width
-                            height_ratio = target_height / img.height
-                            
-                            # Use the larger ratio to ensure the image fills the target dimensions
-                            scale_factor = max(width_ratio, height_ratio)
-                            
-                            # Calculate new dimensions (larger than target dimensions)
-                            new_width = int(img.width * scale_factor)
-                            new_height = int(img.height * scale_factor)
-                            
-                            # Resize image (to larger than target dimensions)
-                            img = img.resize((new_width, new_height), resize_method)
-                            
-                            # Calculate crop box to center the image
-                            left = (new_width - target_width) // 2
-                            top = (new_height - target_height) // 2
-                            right = left + target_width
-                            bottom = top + target_height
-                            
-                            # Crop the image to the target dimensions
-                            img = img.crop((left, top, right, bottom))
-                        else:
-                            # Direct resize to target dimensions
-                            img = img.resize((target_width, target_height), resize_method)
-                        
-                        # Save original image without text
-                        original_image_path = page_dir / f"image_original_{idx}.png"
-                        img.save(original_image_path, "PNG")
-                        
-                        # Save copies for text overlay
-                        image_with_text_path = page_dir / f"image_{idx}.png"
-                        img.save(image_with_text_path, "PNG")
-                        
-                        # Save a copy in the processed directory
-                        processed_dir = self.processed_dir
-                        processed_dir.mkdir(exist_ok=True)
-                        processed_image_path = processed_dir / f"page_{page_number:02d}.png"
-                        img.save(processed_image_path, "PNG")
-                        
-                        # Store original image file path
-                        self.original_image_files[page_number] = str(original_image_path)
-                        self.checkpoint_manager.add_original_image_file(page_number, str(original_image_path))
-                        
-                        # Apply text overlay to the copies (not the original)
-                        self.text_overlay_manager.apply_text_overlay(image_with_text_path, text, page_number)
-                        self.text_overlay_manager.apply_text_overlay(processed_image_path, text, page_number, is_final=True)
-                        
-                        image_count += 1
-                        logger.info(f"Saved image {idx} for page {page_number}")
-                        
-                    except Exception as e:
-                        logger.error(f"Error processing image {idx} for page {page_number}: {str(e)}")
-                        continue
+                    # Calculate position to center the image
+                    x = (target_width - new_width) // 2
+                    y = (target_height - new_height) // 2
+                    
+                    # Paste resized image onto background
+                    background.paste(img_resized, (x, y))
+                    final_img = background
+                elif maintain_aspect and smart_crop:
+                    # Smart crop: resize to fill the canvas completely and crop excess
+                    width_ratio = target_width / img.width if img.width > 0 else 1
+                    height_ratio = target_height / img.height if img.height > 0 else 1
+                    
+                    # Use the larger ratio to ensure the image fills the target dimensions
+                    scale_factor = max(width_ratio, height_ratio)
+                    
+                    # Calculate new dimensions (larger than target dimensions)
+                    new_width = int(img.width * scale_factor)
+                    new_height = int(img.height * scale_factor)
+                    
+                    # Resize image (to larger than target dimensions)
+                    img_resized = img.resize((new_width, new_height), resize_method)
+                    
+                    # Calculate crop box to center the image
+                    left = (new_width - target_width) // 2
+                    top = (new_height - target_height) // 2
+                    right = left + target_width
+                    bottom = top + target_height
+                    
+                    # Crop the image to the target dimensions
+                    final_img = img_resized.crop((left, top, right, bottom))
+                else:
+                    # Direct resize to target dimensions
+                    final_img = img.resize((target_width, target_height), resize_method)
+                
+                # Save original image without text
+                original_image_path = page_dir / f"image_original_{idx}.png"
+                final_img.save(original_image_path, "PNG")
+                
+                # Save copies for text overlay
+                image_with_text_path = page_dir / f"image_{idx}.png"
+                final_img.save(image_with_text_path, "PNG")
+                
+                # Save a copy in the processed directory
+                processed_dir = self.processed_dir
+                processed_dir.mkdir(exist_ok=True)
+                processed_image_path = processed_dir / f"page_{page_number:02d}.png"
+                final_img.save(processed_image_path, "PNG")
+                
+                # Store original image file path (only store the first generated image for reference)
+                if image_count == 0: # Only store the path for the first image generated for this page
+                    self.original_image_files[page_number] = str(original_image_path)
+                    self.checkpoint_manager.add_original_image_file(page_number, str(original_image_path))
+                
+                # Apply text overlay to the copies (not the original)
+                self.text_overlay_manager.apply_text_overlay(image_with_text_path, text, page_number)
+                self.text_overlay_manager.apply_text_overlay(processed_image_path, text, page_number, is_final=True)
+                
+                image_count += 1
+                logger.info(f"Saved image {idx} for page {page_number}")
+                
+            except Exception as e:
+                logger.error(f"Error processing image {idx} for page {page_number}: {str(e)}")
+                continue
         
         if image_count == 0:
-            if not image_data_found:
-                logger.error("No image data found in API response despite requesting image modality.")
-            else:
-                logger.error("Found image data in response but failed to process any images.")
+            logger.error(f"Failed to process any valid image data for page {page_number}.")
                 
         return image_count
 
@@ -1475,6 +1237,108 @@ The description should be detailed enough for an AI image generation model to cr
             logger.warning(f"Error adding reference image: {str(e)}")
             # Continue without reference image if there's an error
 
+    def generate_cover(self):
+        """Generate the book cover image and apply text overlay."""
+        logger.info("Attempting to generate book cover...")
+        
+        # Check if cover generation is enabled in config
+        cover_config = self.config.get('cover', {})
+        if not cover_config.get('generate_cover', False):
+            logger.info("Cover generation is disabled in config. Skipping.")
+            return
+
+        book_config = self.config.get('book', {})
+        
+        try:
+            # Determine reference page and image path
+            ref_page_num = cover_config.get('reference_page_for_style', 1)
+            ref_image_path = self.output_dir / f"page_{ref_page_num:02d}" / "image_original_1.png"
+            reference_image_b64 = None
+            
+            if ref_image_path.exists():
+                logger.info(f"Using image from page {ref_page_num} as style reference for the cover.")
+                with open(ref_image_path, "rb") as image_file:
+                    reference_image_b64 = base64.b64encode(image_file.read()).decode('utf-8')
+            else:
+                logger.warning(f"Reference image not found at {ref_image_path}. Generating cover without style reference.")
+
+            # Format the cover prompt
+            prompt_template = cover_config.get('cover_prompt_template', "A vibrant book cover for '{title}'")
+            title = cover_config.get('cover_title') or book_config.get('title', 'My Book')
+            author = cover_config.get('cover_author', 'Generated by AI')
+            theme = book_config.get('theme', "a children's story")
+            art_style = book_config.get('art_style', 'illustration')
+            characters_list = [c.get('name', f'Character {i+1}') for i, c in enumerate(self.config.get('characters', {}).values())]
+            characters = ", ".join(characters_list) if characters_list else "the main character"
+
+            final_prompt = prompt_template.format(
+                title=title, 
+                characters=characters, 
+                theme=theme, 
+                art_style=art_style,
+                author=author # Added author just in case it's useful in the template
+            )
+            logger.info(f"Cover prompt: {final_prompt}")
+
+            # Call API client to generate image
+            # NOTE: Assuming api_client.generate_image can handle a reference image (e.g., as base64).
+            #       This might require modification in api_client.py
+            image_data_list = self.api_client.generate_image(
+                prompt_text=final_prompt, # Corrected keyword argument
+                page_number=0, # Using 0 for cover
+                reference_image_b64=reference_image_b64
+            )
+
+            if not image_data_list:
+                logger.error("API did not return image data for the cover.")
+                return
+
+            # Assuming the API returns a list of base64 encoded images, take the first one
+            image_data_base64 = image_data_list[0]
+
+            # Save the original cover image
+            cover_original_path = self.output_dir / "cover_original.png"
+            try:
+                img_data = base64.b64decode(image_data_base64)
+                img = Image.open(BytesIO(img_data))
+                
+                # Ensure image matches target dimensions (optional, but good practice)
+                if img.size != (self.image_width, self.image_height):
+                   logger.warning(f"Generated cover size {img.size} differs from target ({self.image_width}, {self.image_height}). Resizing.")
+                   img = img.resize((self.image_width, self.image_height), Image.Resampling.LANCZOS)
+                   
+                img.save(cover_original_path)
+                logger.info(f"Saved original cover image to {cover_original_path}")
+            except Exception as e:
+                logger.error(f"Failed to decode or save original cover image: {e}")
+                return
+
+            # Apply text overlay
+            cover_final_path = self.output_dir / "cover_final.png"
+            # Copy original to final path first, overlay manager might modify in-place
+            import shutil
+            shutil.copy2(cover_original_path, cover_final_path)
+
+            cover_text = f"{title}\n{author}"
+            position = cover_config.get('cover_text_position', 'middle')
+            
+            # NOTE: Assuming text_overlay_manager.apply_text_overlay can handle page_number=0 
+            #       and potentially uses different logic/fonts for covers via an is_cover flag or similar.
+            #       This might require modification in text_overlay_manager.py
+            self.text_overlay_manager.apply_text_overlay(
+                image_path=cover_final_path, 
+                text=cover_text, 
+                page_number=0, # Using 0 to denote cover
+                position=position,
+                is_cover=True # Added flag to signal this is a cover
+            )
+            logger.info(f"Applied text overlay and saved final cover to {cover_final_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to generate cover: {e}")
+            # Decide if we should raise the error or just log it and continue without a cover
+            # For now, logging seems safer to allow book generation to complete.
+
 def handle_rate_limit_retry(max_retries=3, initial_wait=20):
     """Try to resume book generation with exponential backoff for rate limits."""
     retry_count = 0
@@ -1514,7 +1378,7 @@ def main():
     parser = argparse.ArgumentParser(description='Generate a children\'s book with text and illustrations.')
     parser.add_argument('--retry', action='store_true', help='Auto-retry on rate limits')
     parser.add_argument('--regenerate', type=str, help='Regenerate specific pages (comma-separated)')
-    parser.add_argument('--apply-text', type=str, nargs='*', help='Apply text overlay to existing images. Optional arguments: <position> <page>. Position can be "top", "middle", or "bottom" (default: bottom). Page can be a specific page number (default: all pages)')
+    parser.add_argument('--apply-text', type=str, nargs='*', help='Apply text overlay to existing images. Optional arguments: [position] [page_num|cover]. Position: top, middle, bottom (default: bottom). Target: specific page number, "cover", or blank for all pages.')
     args = parser.parse_args()
     
     generator = BookGenerator(config_path)
@@ -1522,28 +1386,72 @@ def main():
     if args.apply_text:
         # Parse text placement options
         position = "bottom"  # default position
-        target_page = None  # default to all pages
+        target = "all"  # default to all pages
         
         if args.apply_text:  # args.apply_text is a list of optional arguments
             for arg in args.apply_text:
                 if arg in ["top", "middle", "bottom"]:
                     position = arg
                 else:
-                    try:
-                        target_page = int(arg)
-                    except ValueError:
-                        logger.warning(f"Invalid page number: {arg}, ignoring")
+                    target = arg # Can be a page number or "cover"
         
-        logger.info(f"Applying text overlays with position: {position}" + (f" to page {target_page}" if target_page else " to all pages"))
-        
-        # Find all existing page directories
-        for page_dir in sorted(Path("outputs").glob("**/page_*")):
+        logger.info(f"Applying text overlays with position: {position} to target: {target}")
+
+        # --- Handle Cover Application --- #
+        if target == "cover":
+            cover_original_path = generator.output_dir / "cover_original.png"
+            cover_final_path = generator.output_dir / "cover_final.png"
+            if cover_original_path.exists():
+                logger.info(f"Applying text overlay to cover at {position}")
+                # Get cover title/author from config
+                book_config = generator.config.get('book', {})
+                cover_config = generator.config.get('cover', {})
+                meta_config = generator.config.get('metadata', {})
+                title = cover_config.get('cover_title') or book_config.get('title', 'My Book')
+                author = cover_config.get('cover_author') or meta_config.get('author') or 'Generated by AI'
+                cover_text = f"{title}\n{author}"
+
+                # Copy original to final path first
+                import shutil
+                shutil.copy2(cover_original_path, cover_final_path)
+                
+                # Apply overlay using cover style
+                try:
+                    generator.text_overlay_manager.apply_text_overlay(
+                        image_path=cover_final_path, 
+                        text=cover_text, 
+                        page_number=0, # Using 0 to denote cover
+                        position=position,
+                        is_cover=True 
+                    )
+                    logger.info(f"Applied text overlay to {cover_final_path}")
+                except Exception as e:
+                     logger.error(f"Failed to apply text overlay to cover: {e}")
+            else:
+                logger.error(f"Original cover image not found at {cover_original_path}. Cannot apply text.")
+            
+            logger.info("Finished applying text to cover.")
+            return # Exit after processing cover
+
+        # --- Handle Page Application (Existing Logic Adapted) --- #
+        target_page_num = None
+        if target != "all":
+            try:
+                target_page_num = int(target)
+            except ValueError:
+                logger.error(f"Invalid target specified: {target}. Must be a page number, 'cover', or blank for all.")
+                return
+
+        logger.info(f"Applying text to pages" + (f" (specifically page {target_page_num})" if target_page_num is not None else " (all pages)"))
+
+        # Find all existing page directories in the generator's output dir
+        for page_dir in sorted(generator.output_dir.glob("page_*")):
             try:
                 # Extract page number from directory name
                 page_num = int(page_dir.name.split('_')[1])
                 
                 # Skip if not the target page
-                if target_page is not None and page_num != target_page:
+                if target_page_num is not None and page_num != target_page_num:
                     continue
                 
                 # Check if original image exists
@@ -1585,9 +1493,10 @@ def main():
                 logger.error(f"Error processing page {page_dir.name}: {str(e)}")
                 continue
         
-        logger.info("Finished applying text overlays")
-        return
+        logger.info("Finished applying text overlays to pages.")
+        return # Exit after processing pages
     
+    # --- Regular Generation Flow (If no special flags) --- #
     if args.retry:
         logger.info("Starting with auto-retry for rate limits")
         handle_rate_limit_retry()

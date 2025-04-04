@@ -6,8 +6,14 @@ book:
   art_style: "Whimsical and colorful, suitable for children"
 
 image_settings:
-  width: 1024
-  height: 1024
+  # Resolution requested from the API.
+  # For KDP 300 DPI print: calculate based on print_settings (trim + bleed).
+  # Example: 8.5x8.5 trim + 0.125 bleed = 8.75 x 8.75 inches.
+  #          8.75 * 300 = 2625px width
+  #          8.75 * 300 = 2625px height
+  # Ensure these are within the model's limits (e.g., 3072x3072).
+  width: 2625
+  height: 2625
   format: "RGB"
   resize_method: "lanczos"  # Options: nearest, box, bilinear, hamming, bicubic, lanczos
   maintain_aspect_ratio: true
@@ -18,6 +24,15 @@ characters:
   main_character:
     name: "Nia"
     description: "A spirited 5-year-old girl who loves exploring nature"
+    # Appearance rules that should always apply
+    persistent_appearance:
+      - "Hair is always wavy brown."
+      - "Always wears comfortable brown sandals."
+      # Add other core, unchanging features here (e.g., backpack color)
+      # - "Always wears a [COLOR] backpack."
+    # Appearance rules specific to story phases/scenes (optional)
+    appearance_rules:
+      default:
     appearance: "wavy brown hair, bright sparkling eyes, and a joyful smile"
     outfit: "a yellow sundress, comfortable sandals, and a small backpack"
     introduction:
@@ -49,6 +64,14 @@ characters:
   supporting_character:
     name: "Whisp"
     description: "A magical deer that guides wanderers in the enchanted meadow"
+    # Appearance rules that should always apply
+    persistent_appearance:
+      - "Fur is always light brown with white spots."
+      - "Antlers always have a soft, magical glow."
+      # Add other core, unchanging features here
+    # Appearance rules specific to story phases/scenes (optional)
+    appearance_rules:
+      default:
     appearance: "a gentle, glowing deer with soft, luminous antlers"
     features: "delicate, shimmering fur, kind eyes, and an aura of calm"
     introduction:
@@ -614,3 +637,58 @@ scene_management:
     conclusion:
       start_page: 9
   default_phase: "conclusion"
+
+# Output format preferences
+output_formats:
+  pdf: true
+  epub: true
+  html: true
+  text: true
+
+# --- Metadata for Production --- #
+metadata:
+  language: "en-US"  # Language code (e.g., en-US, es-ES)
+  author: "Amer DK" # Author name (can override cover_author if needed)
+  publisher: "Self-Published" # Publisher name
+  isbn: ""  # International Standard Book Number (optional, leave blank if none)
+  description: "A wonderful children's story about adventure and friendship." # Book blurb/summary
+  keywords: "childrens book, story, adventure, friendship, AI generated" # Comma-separated keywords
+  publication_year: "" # Year of publication (e.g., 2025). Leave blank to auto-fill current year.
+  rights: "All rights reserved" # Copyright/rights statement
+
+# --- KDP Print Formatting Settings --- #
+print_settings:
+  # Trim Size (the final size of the book page after cutting)
+  trim_width: 8.5
+  trim_height: 8.5
+  unit: "inch" # or "mm"
+
+  # Bleed (content extending beyond the trim line)
+  has_bleed: true # Set to true if images/elements touch the page edge
+  bleed_amount: 0.125 # Standard KDP bleed in 'unit' (e.g., 0.125 inches)
+
+  # Margins (safe area within the trim lines)
+  margin_top: 0.5
+  margin_bottom: 0.5
+  margin_inside: 0.75 # Gutter margin (larger for binding)
+  margin_outside: 0.5
+  # margin_unit is the same as 'unit' above
+
+  # Paper Type (affects spine width for cover calculation later)
+  paper_type: "white" # "white", "cream", or "color"
+
+  # Image DPI Target (for reference, actual image size depends on API/source)
+  target_dpi: 300
+
+# Cover generation settings
+cover:
+  generate_cover: true  # Set to false to skip cover generation
+  # Prompt template for the cover image. Placeholders like {title}, {characters}, {theme}, {art_style} will be replaced.
+  cover_prompt_template: "A vibrant book cover illustration for a children's book featuring {characters}. The main theme is {theme}. Maintain the art style: {art_style}. IMPORTANT: Do NOT include any text, letters, or words in the image."
+  cover_title: "" # Leave empty to use book_details.title, or specify a different title for the cover
+  cover_author: "By Amer" # Specify the author name for the cover
+  cover_text_position: "middle" # Position for title/author overlay: "top", "middle", "bottom"
+  reference_page_for_style: 1 # Which page number's image to use as a style reference for the cover generation
+
+# Checkpoint and logging settings
+# ... existing code ...
