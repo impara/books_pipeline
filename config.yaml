@@ -23,19 +23,11 @@ image_settings:
 characters:
   main_character:
     name: "Nia"
-    description: "A spirited 5-year-old girl who loves exploring nature"
-    # Appearance rules that should always apply
-    persistent_appearance:
-      - "Hair is always wavy brown."
-      - "Always wears comfortable brown sandals."
-      - "backpack color is always blue."
-      # Add other core, unchanging features here (e.g., backpack color)
-      # - "Always wears a [COLOR] backpack."
-    # Appearance rules specific to story phases/scenes (optional)
-    appearance_rules:
-      default:
-    appearance: "wavy brown hair, bright sparkling eyes, and a joyful smile"
-    outfit: "a yellow sundress, comfortable sandals, and a small backpack"
+    description: "A spirited 5-year-old girl with curious, bright sparkling eyes and a joyful smile. She has wavy brown hair often slightly tousled from her adventures exploring nature."
+    # Appearance rules integrated into fields below
+    appearance: "Always has wavy brown hair, bright sparkling eyes, and a joyful expression. Skin tone is light tan."
+    outfit: "Always wears a simple yellow sundress suitable for outdoor play. Always wears comfortable, sturdy brown sandals. Always carries a small, practical blue backpack."
+    features: "Distinctive feature: A small freckle just beside her left eye." # Example, feel free to change
     introduction:
       page: 1
       trigger: "Nia"
@@ -64,17 +56,10 @@ characters:
 
   supporting_character:
     name: "Whisp"
-    description: "A magical deer that guides wanderers in the enchanted meadow"
-    # Appearance rules that should always apply
-    persistent_appearance:
-      - "Fur is always light brown with white spots."
-      - "Antlers always have a soft, magical glow."
-      # Add other core, unchanging features here
-    # Appearance rules specific to story phases/scenes (optional)
-    appearance_rules:
-      default:
-    appearance: "a gentle, glowing deer with soft, luminous antlers"
-    features: "delicate, shimmering fur, kind eyes, and an aura of calm"
+    description: "A mystical, gentle deer embodying the magic of the enchanted meadow. Acts as a calm guide to those who are lost or in need."
+    # Appearance rules integrated into fields below
+    appearance: "Always has light brown fur distinctly marked with white spots, similar to a fawn but with a subtle magical sheen. Antlers are elegant and always emit a soft, warm, magical glow (not overly bright)."
+    features: "Eyes are large, dark, and express kindness and wisdom. Fur has a delicate, shimmering quality, especially in magical light. Moves with grace and radiates an aura of calm serenity."
     introduction:
       page: 3
       trigger: "glowing deer"
@@ -99,7 +84,9 @@ characters:
 
   meadow_hedgehog:
     name: "Meadow Hedgehog"
-    description: "A small, timid hedgehog who needs help"
+    description: "A small, shy European hedgehog native to the meadow environment. Appears timid but curious."
+    appearance: "Typical hedgehog appearance: body covered in brown and cream-colored spines, a small pointed snout, dark beady eyes, and short legs."
+    features: "Moves with a characteristic shuffling gait. Curls into a ball when frightened, showing only its spines."
     introduction:
       page: 7
       trigger: "hedgehog"
@@ -679,13 +666,13 @@ print_settings:
 
 # Cover generation settings
 cover:
-  generate_cover: true  # Set to false to skip cover generation
+  generate_cover: false  # Set to false to skip cover generation
   # Prompt template for the cover image. Placeholders like {title}, {characters}, {theme}, {art_style} will be replaced.
   cover_prompt_template: "A vibrant book cover illustration for a children's book featuring {characters}. The main theme is {theme}. Maintain the art style: {art_style}. IMPORTANT: Do NOT include any text, letters, or words in the image."
   cover_title: "" # Leave empty to use book_details.title, or specify a different title for the cover
   cover_author: "By Amer" # Specify the author name for the cover
   cover_text_position: "middle" # Position for title/author overlay: "top", "middle", "bottom"
   reference_page_for_style: 1 # Which page number's image to use as a style reference for the cover generation
-
+  cover_text_color: "#000000" 
 # Checkpoint and logging settings
 # ... existing code ...

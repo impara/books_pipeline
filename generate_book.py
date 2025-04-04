@@ -123,8 +123,8 @@ class BookGenerator:
         """Find the most suitable reference image page for consistency.
         
         Selection criteria:
-        1. From same phase of the story
-        2. Considering image quality and scene similarity
+        1. Earliest introduction page of a character present in the current scene (if image exists).
+        2. Otherwise, the most recent page with an image.
         """
         # Get all available pages with images before the current page
         available_pages = sorted([p for p in self.original_image_files.keys() if p < page_number], reverse=True)
@@ -132,26 +132,38 @@ class BookGenerator:
         if not available_pages:
             logger.info(f"No reference pages found for page {page_number}")
             return None
+
+        # Try to find the earliest introduction page with an image among current characters
+        try:
+            scene_reqs = self.scene_manager.get_scene_requirements(page_number)
+            current_chars = scene_reqs.get('characters', [])
+            intro_pages_with_images = []
             
-        # Get story phase for current page
-        current_phase = self.scene_manager._get_story_phase(page_number)
-        
-        if current_phase and 'story_progression' in self.config:
-            # Try to get the first page of the current phase
-            phase_mapping = self.config['story_progression']['phase_mapping'].get(current_phase, {})
-            first_page_in_phase = phase_mapping.get('start_page')
+            if current_chars:
+                for char_name in current_chars:
+                     # Find the character type key based on name
+                    char_type = next((ct for ct, cd in self.config['characters'].items() if cd['name'] == char_name), None)
+                    if char_type:
+                        intro_page = self.config['characters'][char_type].get('introduction', {}).get('page')
+                        if intro_page and intro_page != page_number and intro_page in self.original_image_files:
+                            intro_pages_with_images.append(intro_page)
+
+            if intro_pages_with_images:
+                earliest_intro_page = min(intro_pages_with_images)
+                logger.info(f"Using earliest character introduction page {earliest_intro_page} as reference for page {page_number}")
+                return earliest_intro_page
+                
+        except Exception as e:
+             logger.warning(f"Could not determine character introduction page for reference due to error: {e}. Falling back.")
+
+        # Fallback: Use the most recent page with an image
+        if available_pages:
+            most_recent_page = available_pages[0]
+            logger.info(f"Using most recent page {most_recent_page} as reference for page {page_number}")
+            return most_recent_page
             
-            # If first page of phase exists and has an image, use it
-            if first_page_in_phase and first_page_in_phase in self.original_image_files:
-                # Avoid self-references (don't use page 5 as a reference for page 5)
-                if first_page_in_phase != page_number:
-                    logger.info(f"Using first page of phase '{current_phase}' (page {first_page_in_phase}) as reference")
-                    return first_page_in_phase
-        
-        # If no phase-based reference found, use the most recent page
-        best_ref = available_pages[0]
-        logger.info(f"Using most recent page {best_ref} as reference")
-        return best_ref
+        logger.info(f"Could not find any suitable reference page for page {page_number}")
+        return None
 
     def generate_prompt(self, page_number: int) -> str:
         """Generate a prompt for the Gemini model."""
@@ -162,20 +174,6 @@ class BookGenerator:
         
         # Get scene requirements from scene_manager
         scene_requirements = self.scene_manager.get_scene_requirements(page_number)
-        
-        # Build character details dynamically
-        character_details = []
-        if page_number == 1:  # Only provide detailed descriptions for first page
-            for char_type, char_data in self.config['characters'].items():
-                char_name = char_data['name']
-                char_appearance_rules = self.scene_manager.get_character_appearance_rules(char_name)
-                
-                # Build character details dynamically from all available attributes
-                details = [f"{char_name}:"]
-                for attr, value in char_appearance_rules.items():
-                    details.append(f"- {attr.replace('_', ' ').title()}: {value}")
-                
-                character_details.append("\n".join(details))
         
         # Build consistency rules from config
         consistency_rules = [
@@ -246,9 +244,6 @@ class BookGenerator:
         prompt_parts.append("\nCharacters:")
         for char_type, char_data in self.config['characters'].items():
             prompt_parts.append(f"- {char_data['name']} ({char_data['description']})")
-        
-        if character_details:
-            prompt_parts.extend(["\nDetailed Character Descriptions:", *character_details])
         
         # Add scene requirements from scene_manager
         if scene_requirements:
@@ -513,7 +508,7 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             required_characters = self._get_required_characters(page_number, prompt_text)
             
             # Get character instructions and anti-duplication rules
-            character_instructions = self._build_character_instructions(required_characters)
+            character_instructions = self._build_character_instructions(required_characters, scene_requirements)
             anti_duplication_rules = self._get_anti_duplication_rules(len(required_characters), required_characters)
             
             # Build the final prompt
@@ -700,11 +695,14 @@ ONLY provide the exact text for the page - no additional commentary or descripti
                 
         return "\n".join(scene_analysis_parts)
         
-    def _build_character_instructions(self, required_characters: List[dict]) -> str:
-        """Build detailed character instructions including persistent rules."""
-        instructions = []
-        char_names = set() # To prevent duplicates if config is messy
+    def _build_character_instructions(self, required_characters: List[dict], scene_requirements: dict) -> str:
+        """Build detailed instructions for each character, including appearance rules."""
+        instructions = ["CHARACTER INSTRUCTIONS (FOLLOW CAREFULLY):"]
+        char_names = set() # Track names to avoid duplicates if required_characters has them
         
+        # Get appearance rules from scene_requirements if available
+        all_char_rules = scene_requirements.get('character_appearance_rules', {})
+
         for i, char in enumerate(required_characters):
             char_name = char.get('name')
             if not char_name or char_name in char_names:
@@ -715,26 +713,22 @@ ONLY provide the exact text for the page - no additional commentary or descripti
                 f"{i+1}. Character: {char_name} | Description: {char.get('description', 'N/A')}"
             ]
             
-            # Add standard appearance attributes if they exist
-            for attr in ['appearance', 'outfit', 'features']:
-                if value := char.get(attr):
-                    char_details.append(f"   | {attr.capitalize()}: {value}")
-
-            # --- Add Persistent Appearance Rules --- #
-            # Find the character config data
-            char_config_data = None
-            for cfg_type, cfg_info in self.config.get('characters', {}).items():
-                if cfg_info.get('name') == char_name:
-                    char_config_data = cfg_info
-                    break
-            
-            if char_config_data and 'persistent_appearance' in char_config_data:
-                persistent_rules = char_config_data['persistent_appearance']
-                if persistent_rules and isinstance(persistent_rules, list):
-                    char_details.append("   | PERSISTENT RULES (MUST FOLLOW):")
-                    for rule in persistent_rules:
-                        char_details.append(f"     - {rule}")
-            # --- End Persistent Rules --- #
+            # --- Add Appearance Rules from Scene Requirements --- #
+            char_rules = all_char_rules.get(char_name, {})
+            if char_rules:
+                char_details.append("   | APPEARANCE RULES (MUST FOLLOW):")
+                for rule_type, rule_value in char_rules.items():
+                     # Handle rules that might be strings or lists (like features)
+                    if isinstance(rule_value, list):
+                        char_details.append(f"     - {rule_type.capitalize()}: {', '.join(rule_value)}")
+                    else:
+                        char_details.append(f"     - {rule_type.capitalize()}: {rule_value}")
+            else:
+                 # Fallback to standard appearance attributes if rules not fetched
+                 for attr in ['appearance', 'outfit', 'features']:
+                     if value := char.get(attr):
+                         char_details.append(f"   | {attr.capitalize()}: {value}")
+            # --- End Appearance Rules --- #
 
             # Add action and emotion
             if action := char.get('action'):
@@ -744,7 +738,7 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             else:
                  char_details.append(f"   | Emotion: None") # Explicitly state None if not specified
                  
-            char_details.append("   | IMPORTANT: This character must appear EXACTLY ONCE in the scene")
+            # char_details.append("   | IMPORTANT: This character must appear EXACTLY ONCE in the scene") # Moved to anti-duplication
             instructions.append("\n".join(char_details))
             
         return "\n\n".join(instructions)
@@ -1223,6 +1217,9 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             # Add the guidance text
             prompt_parts.append({"text": "\n".join(guidance)})
             
+            # Add specific instruction to prioritize reference image consistency
+            prompt_parts.append({"text": "\n**CRITICAL CONSISTENCY NOTE:** Prioritize matching the character appearances (features, clothing, style) EXACTLY as shown in the reference image above. Use the character rules only as secondary guidance if the reference is unclear."})
+
             # Add the reference image
             prompt_parts.append({
                 "inlineData": {
@@ -1271,20 +1268,48 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             characters_list = [c.get('name', f'Character {i+1}') for i, c in enumerate(self.config.get('characters', {}).values())]
             characters = ", ".join(characters_list) if characters_list else "the main character"
 
+            # --- Add Detailed Character Descriptions for Cover --- #
+            cover_char_details_list = ["CHARACTER DETAILS (MUST FOLLOW):"]
+            for char_name in characters_list:
+                char_config = next((cd for ct, cd in self.config.get('characters', {}).items() if cd.get('name') == char_name), None)
+                if char_config:
+                    details = [f"- {char_name}:"]
+                    if appearance := char_config.get('appearance'):
+                        details.append(f"  - Appearance: {appearance}")
+                    if outfit := char_config.get('outfit'):
+                        details.append(f"  - Outfit: {outfit}")
+                    if features := char_config.get('features'):
+                        details.append(f"  - Features: {features}")
+                    cover_char_details_list.append("\n".join(details))
+            cover_char_details = "\n".join(cover_char_details_list)
+            # --- End Character Descriptions --- #
+
             final_prompt = prompt_template.format(
                 title=title, 
-                characters=characters, 
+                characters=characters, # Keep names here for template compatibility
                 theme=theme, 
                 art_style=art_style,
-                author=author # Added author just in case it's useful in the template
+                author=author
             )
-            logger.info(f"Cover prompt: {final_prompt}")
+            
+            # Add character details and consistency instruction to the prompt parts sent to API
+            prompt_parts_for_api = [
+                {"text": final_prompt},
+                {"text": "\n" + cover_char_details},
+                {"text": "\n**CONSISTENCY:** Ensure the characters depicted match the details above AND the overall style of the reference image."}
+            ]
+
+            logger.info(f"Cover prompt (base): {final_prompt}")
+            logger.info(f"Cover character details added: {cover_char_details}")
 
             # Call API client to generate image
-            # NOTE: Assuming api_client.generate_image can handle a reference image (e.g., as base64).
-            #       This might require modification in api_client.py
+            # Modify API call to potentially handle structured prompt parts if needed
+            # Assuming api_client.generate_image can handle a list of text parts or needs adjustment
+            # For now, let's concatenate the prompt parts
+            full_prompt_text = "\n".join(part["text"] for part in prompt_parts_for_api)
+            
             image_data_list = self.api_client.generate_image(
-                prompt_text=final_prompt, # Corrected keyword argument
+                prompt_text=full_prompt_text, # Send the combined prompt
                 page_number=0, # Using 0 for cover
                 reference_image_b64=reference_image_b64
             )
@@ -1503,9 +1528,19 @@ def main():
     else:
         try:
             if args.regenerate:
-                # Convert comma-separated string to list of integers
-                pages_to_regenerate = [int(x.strip()) for x in args.regenerate.split(',')]
-                generator.regenerate_pages(pages_to_regenerate)
+                # Handle cover regeneration separately
+                if args.regenerate.strip().lower() == 'cover':
+                    logger.info("Regenerating cover...")
+                    generator.generate_cover()
+                    logger.info("Cover regeneration complete.")
+                else:
+                    # Convert comma-separated string to list of integers for page numbers
+                    try:
+                        pages_to_regenerate = [int(x.strip()) for x in args.regenerate.split(',')]
+                        generator.regenerate_pages(pages_to_regenerate)
+                    except ValueError:
+                         logger.error(f"Invalid page number found in --regenerate argument: {args.regenerate}. Please provide comma-separated page numbers or 'cover'.")
+                         raise # Re-raise the error to stop execution gracefully
             else:
                 generator.generate_book()
         except Exception as e:

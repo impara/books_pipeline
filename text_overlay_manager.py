@@ -113,15 +113,22 @@ class TextOverlayManager:
             
             width, height = image.size
             
-            # Choose style based on page type or if it's a cover
+            # Choose style based on whether it's a cover or final page
             if is_cover:
                 style_name = "cover"
                 logger.info(f"Applying cover-specific text style for image: {os.path.basename(image_path)}")
+                style = self.text_styles.get(style_name, self.text_styles["cover"])
+                # --- Get cover text color from config --- #
+                cover_config = self.config.get('cover', {})
+                text_color_override = cover_config.get('cover_text_color', style.get('color', 'white')) # Default to white if not in config or style
+                style['color'] = text_color_override
+                # --- End color override --- #
+            elif is_final:
+                style_name = "final"
+                style = self.text_styles.get(style_name, self.text_styles["story"])
             else:
-                # Default to story style for all non-cover pages
                 style_name = "story"
-                
-            style = self.text_styles.get(style_name, self.text_styles["story"]) # Fallback to story style
+                style = self.text_styles.get(style_name, self.text_styles["story"])
             
             # Calculate text area dimensions
             text_area_height = int(height * style["text_area_height_factor"])

@@ -93,6 +93,14 @@ class SceneManager:
         characters = self._get_required_characters(page_number, content_text)
         if characters:
             scene_info['characters'] = characters
+            # Fetch and add appearance rules for each character
+            char_rules = {}
+            for char_name in characters:
+                rules = self.get_character_appearance_rules(char_name)
+                if rules: # Only add if rules are found
+                    char_rules[char_name] = rules
+            if char_rules: # Only add the key if there are any rules
+                scene_info['character_appearance_rules'] = char_rules
             
         # Get transition requirements if not the first page
         if page_number > 1:
