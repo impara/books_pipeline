@@ -287,7 +287,7 @@ class APIClient:
         else:
             return "", False
 
-    def generate_image(self, prompt_text: str, safety_settings: Optional[List[Dict[str, str]]] = None, reference_image_b64: Optional[str] = None, page_number: Optional[int] = None) -> Optional[List[str]]:
+    def generate_image(self, prompt_text: str, safety_settings: Optional[List[Dict[str, str]]] = None, reference_image_b64: Optional[str] = None, page_number: Optional[int] = None, scene_requirements: Optional[dict] = None) -> Optional[List[str]]:
         """Generate an image using the Gemini API, optionally with a reference image.
         
         Args:
@@ -295,6 +295,7 @@ class APIClient:
             safety_settings: Optional safety settings for content filtering
             reference_image_b64: Optional base64 encoded string of the reference image (PNG format expected)
             page_number: Optional page number for logging/debugging purposes
+            scene_requirements: Optional dictionary containing scene details, including potential reference_override rules.
             
         Returns:
             List of base64-encoded image strings, or None if generation fails.
@@ -306,9 +307,32 @@ class APIClient:
         # Add the text prompt first
         parts.append({"text": prompt_text})
         
-        # Add the reference image if provided
+        # Add the reference image and its specific handling instructions if provided
         if reference_image_b64:
             logger.debug(f"Adding reference image data (length: {len(reference_image_b64)}) to request parts.")
+            
+            # --- Add Reference Override Guidance --- #
+            reference_override_guidance = []
+            if scene_requirements and 'reference_override' in scene_requirements:
+                override_rules = scene_requirements['reference_override']
+                reference_override_guidance.append("\nREFERENCE OVERRIDE INSTRUCTIONS:")
+                if ignore := override_rules.get('ignore_elements'):
+                    reference_override_guidance.append("IGNORE these from reference image:")
+                    reference_override_guidance.extend(f"- {item}" for item in ignore)
+                if force := override_rules.get('force_elements'):
+                    reference_override_guidance.append("FORCE these elements (override reference if needed):")
+                    reference_override_guidance.extend(f"- {item}" for item in force)
+                # Potentially add maintain_only rules here too if needed
+
+                if len(reference_override_guidance) > 1: # Only add if rules were found
+                    parts.append({"text": "\n".join(reference_override_guidance)})
+            # --- End Reference Override Guidance --- #
+
+            # Add the generic consistency note (prioritizing text for character details)
+            # This should come AFTER specific override rules but BEFORE the image data
+            parts.append({"text": "\n**CRITICAL CONSISTENCY NOTE:** Use the text-based \"CHARACTER INSTRUCTIONS\" (especially rules marked with \"ALWAYS\") as the PRIMARY source for character appearance details (features, clothing, colors). Use the reference image below MAINLY for overall style, color palette, character placement, and general visual guidance. If the reference image contradicts a specific \"ALWAYS\" rule in the text, FOLLOW THE TEXT RULE."})
+
+            # Add the image data itself
             parts.append({
                 "inlineData": {
                     "mimeType": "image/png", # Assuming PNG reference images

@@ -1,678 +1,526 @@
+# ================================================
+# Book Generation Pipeline Configuration (config.yaml)
+# ================================================
+# This file defines all the parameters for generating a children's book.
+# Use this as a template for new book projects.
+
+# --- Basic Book Details --- #
 book:
-  title: "The Secret Meadow"
-  target_age_range: "4-8"
-  theme: "Adventure and Friendship"
-  page_count: 10
-  art_style: "Whimsical and colorful, suitable for children"
+  title: "The Moonlit Quest"                  # The title of the book.
+  target_age_range: "5-9"                      # Target audience age range.
+  theme: "Mystery and Adventure"               # Main theme of the story.
+  page_count: 15                               # Total number of pages.
+  art_style: "Dreamy and whimsical illustration style"  # Desired art style for illustrations.           # Enforce consistent depiction of the main character on every page.
 
+# --- Image Generation Settings --- #
 image_settings:
-  # Resolution requested from the API.
-  # For KDP 300 DPI print: calculate based on print_settings (trim + bleed).
-  # Example: 8.5x8.5 trim + 0.125 bleed = 8.75 x 8.75 inches.
-  #          8.75 * 300 = 2625px width
-  #          8.75 * 300 = 2625px height
-  # Ensure these are within the model's limits (e.g., 3072x3072).
-  width: 2625
-  height: 2625
-  format: "RGB"
-  resize_method: "lanczos"  # Options: nearest, box, bilinear, hamming, bicubic, lanczos
-  maintain_aspect_ratio: true
-  smart_crop: true  # Enable smart cropping to fill the canvas completely
-  background_color: "white"  # Used when maintaining aspect ratio creates empty space
+  width: 3000                                  # Calculated width in pixels.
+  height: 3000                                 # Calculated height in pixels.
+  format: "RGB"                                # Image format.
+  resize_method: "lanczos"                     # Resizing method.
+  maintain_aspect_ratio: true                  # Maintain original aspect ratio.
+  smart_crop: true                             # Enable smart cropping.
+  background_color: "white"                    # Background color for letterboxing.
 
+# --- Character Definitions --- #
 characters:
   main_character:
-    name: "Nia"
-    description: "A spirited 5-year-old girl with curious, bright sparkling eyes and a joyful smile. She has wavy brown hair often slightly tousled from her adventures exploring nature."
-    # Appearance rules integrated into fields below
-    appearance: "Always has wavy brown hair, bright sparkling eyes, and a joyful expression. Skin tone is light tan."
-    outfit: "Always wears a simple yellow sundress suitable for outdoor play. Always wears comfortable, sturdy brown sandals. Always carries a small, practical blue backpack."
-    features: "Distinctive feature: A small freckle just beside her left eye." # Example, feel free to change
+    name: "Lila"                               # Main character's name.
+    description: "A brave and curious 6-year-old girl with sparkling eyes and a mischievous smile. She loves exploring under the moonlight." 
+    appearance: "Always has long, wavy black hair, sparkling dark eyes, and a determined look. Skin tone is warm olive."
+    outfit: "Always wears a soft, pastel-purple jacket over a light pink dress paired with comfortable sneakers."
+    features: "Distinctive feature: A tiny silver star earring on her left ear."
     introduction:
       page: 1
-      trigger: "Nia"
+      trigger: "Lila"
     actions:
-      intro: "wandering through the sunlit meadow with a curious heart"
-      magical_encounter: "pausing as she hears a soft melody carried by the wind"
-      magical_guidance_meeting: "gazing in wonder at the glowing deer, Whisp, emerging from the light"
-      magical_guidance_conversation: "listening carefully as Whisp speaks in gentle tones"
-      magical_guidance_trust: "feeling a mix of nervousness and hope, trusting Whisp's guidance"
-      magical_guidance_journey: "following Whisp through the enchanted meadow with renewed confidence"
-      helping: "rushing to aid a trapped hedgehog caught in prickly brambles"
-      celebration: "beaming with pride as the hedgehog scampers free"
-      farewell: "waving goodbye to Whisp as the magical deer fades into the twilight"
-      conclusion: "returning home with a heart full of wonder and new friendships"
+      intro: "exploring her backyard at twilight with a sense of wonder"
+      discovery: "spotting a mysterious, glowing path leading into the forest"
+      mystery_encounter: "pausing as she hears a gentle hoot in the night air"
+      wise_guidance: "listening intently to the wise owl, Stella, perched on a branch"
+      quest_begin: "stepping onto the path with cautious excitement"
+      magical_bridge: "marveling at a shimmering, moonlit bridge over a quiet stream"
+      deep_forest: "navigating through the enchanted forest with determined steps"
+      rescue: "carefully freeing the Moon Rabbit from enchanted brambles"
+      celebration: "smiling with relief as the Moon Rabbit hops free"
+      farewell: "waving goodbye to her new friends as the night deepens"
+      reflective: "pausing to reflect on her journey amidst the soft glow of moonlight"
+      conclusion: "returning home with a heart full of magical memories"
     emotional_states:
-      1: "curious and eager"
-      2: "intrigued and slightly cautious"
-      3: "awestruck and delighted"
-      4: "engaged and hopeful"
-      5: "anxious but trusting"
-      6: "determined and brave"
-      7: "compassionate and proactive"
-      8: "joyful and proud"
-      9: "bittersweet with farewell"
-      10: "content and inspired"
+      "1": "curious and excited"
+      "2": "intrigued and hopeful"
+      "3": "surprised and attentive"
+      "4": "thoughtful and respectful"
+      "5": "determined and excited"
+      "6": "awed and cautious"
+      "7": "focused and brave"
+      "8": "compassionate and quick"
+      "9": "joyful and relieved"
+      "10": "reflective and mellow"
+      "11": "bittersweet and nostalgic"
+      "12": "pensive yet hopeful"
+      "13": "melancholic yet grateful"
+      "14": "softly smiling in farewell"
+      "15": "inspired and fulfilled"
 
   supporting_character:
-    name: "Whisp"
-    description: "A mystical, gentle deer embodying the magic of the enchanted meadow. Acts as a calm guide to those who are lost or in need."
-    # Appearance rules integrated into fields below
-    appearance: "Always has light brown fur distinctly marked with white spots, similar to a fawn but with a subtle magical sheen. Antlers are elegant and always emit a soft, warm, magical glow (not overly bright)."
-    features: "Eyes are large, dark, and express kindness and wisdom. Fur has a delicate, shimmering quality, especially in magical light. Moves with grace and radiates an aura of calm serenity."
+    name: "Stella"
+    description: "A wise, gentle owl with luminous amber eyes. She guides travelers in the night and knows the forest's secrets."
+    appearance: "Always depicted with soft, mottled brown and gold feathers, large expressive eyes, and a calm demeanor."
+    features: "Has a subtle glow about her, with feathers that shimmer under the moonlight."
     introduction:
       page: 3
-      trigger: "glowing deer"
+      trigger: "owl"
     actions:
-      magical_guidance_meeting: "appearing with a soft radiance amidst the wildflowers"
-      magical_guidance_conversation: "standing gracefully, offering comforting words with a soothing glow"
-      magical_guidance_trust: "nodding subtly, radiating calm assurance"
-      magical_guidance_journey: "leading the way with graceful steps and trails of light"
-      helping: "observing as Nia rescues the trapped hedgehog with gentle care"
-      celebration: "glowing brighter in celebration of Nia's kind deed"
-      farewell: "melting into a cascade of light as dusk approaches"
-      conclusion: "remaining a cherished memory in the twilight sky"
+      mystery_encounter: "perched high on a gnarled branch, watching over the forest"
+      wise_guidance: "speaking in a soothing tone, offering gentle advice"
+      quest_begin: "fluttering silently to guide Lila along the glowing path"
+      magical_bridge: "hovering near the sparkling stream to point out the magical crossing"
+      deep_forest: "leading Lila with measured, graceful glides through the dark woods"
+      rescue: "observing calmly as Lila assists the Moon Rabbit"
+      celebration: "nodding in approval as the rescue is celebrated"
+      farewell: "gradually disappearing into the moonlit shadows, leaving a trail of light"
     emotional_states:
-      3: "mysterious yet gentle"
-      4: "caring and reassuring"
-      5: "empathetic and encouraging"
-      6: "leading with quiet strength"
-      7: "approving and joyful"
-      8: "radiant with pride"
-      9: "ethereal and tender during farewell"
-      10: "a lingering presence of calm"
+      "3": "observant and wise"
+      "4": "kind and reassuring"
+      "5": "alert and guiding"
+      "6": "gentle and encouraging"
+      "7": "calm and composed"
+      "8": "proud and serene"
+      "9": "approving and warm"
+      "10": "melancholic yet hopeful"
 
-  meadow_hedgehog:
-    name: "Meadow Hedgehog"
-    description: "A small, shy European hedgehog native to the meadow environment. Appears timid but curious."
-    appearance: "Typical hedgehog appearance: body covered in brown and cream-colored spines, a small pointed snout, dark beady eyes, and short legs."
-    features: "Moves with a characteristic shuffling gait. Curls into a ball when frightened, showing only its spines."
+  moon_rabbit:
+    name: "Moon Rabbit"
+    description: "A timid, magical rabbit that appears only under the light of the full moon. Its fur shimmers with a silvery glow."
+    appearance: "Possesses soft, luminous white fur with hints of blue, small, bright eyes, and delicate ears."
+    features: "Always seen with a gentle glow and a timid, gentle demeanor."
     introduction:
-      page: 7
-      trigger: "hedgehog"
+      page: 8
+      trigger: "rabbit"
     actions:
-      helping: "found tangled in a bed of prickly brambles, looking anxious"
-      celebration: "scampering happily once freed, with a grateful twinkle in its eyes"
-      farewell: "watching from a safe distance, now free to explore"
-      conclusion: "a symbol of newfound freedom in the quiet meadow"
+      rescue: "found caught in a tangle of enchanted brambles, looking vulnerable"
+      celebration: "joyfully hopping away after being freed, leaving a trail of stardust"
     emotional_states:
-      7: "frightened yet hopeful"
-      8: "relieved and thankful"
-      9: "playful and liberated"
-      10: "content within the serene meadow"
+      "8": "scared and anxious"
+      "9": "relieved and grateful"
 
+# --- Story Structure and Progression --- #
 story_progression:
   phase_mapping:
     intro:
       start_page: 1
       end_page: 1
-    magical_encounter:
+    discovery:
       start_page: 2
       end_page: 2
-    magical_guidance_meeting:
+    mystery_encounter:
       start_page: 3
       end_page: 3
-    magical_guidance_conversation:
+    wise_guidance:
       start_page: 4
       end_page: 4
-    magical_guidance_trust:
+    quest_begin:
       start_page: 5
       end_page: 5
-    magical_guidance_journey:
+    magical_bridge:
       start_page: 6
       end_page: 6
-    helping:
+    deep_forest:
       start_page: 7
       end_page: 7
-    celebration:
+    rescue:
       start_page: 8
       end_page: 8
-    farewell:
+    celebration:
       start_page: 9
       end_page: 9
-    conclusion:
+    farewell:
       start_page: 10
       end_page: 10
+    reflective:
+      start_page: 11
+      end_page: 11
+    transition_home:
+      start_page: 12
+      end_page: 12
+    homecoming:
+      start_page: 13
+      end_page: 13
+    lingering_goodbye:
+      start_page: 14
+      end_page: 14
+    conclusion:
+      start_page: 15
+      end_page: 15
   fallback_phases:
     introduction:
-      end_page: 2
+      end_page: 3
     rising_action:
-      start_page: 3
-      end_page: 5
+      start_page: 4
+      end_page: 7
     climax:
-      start_page: 6
-      end_page: 8
+      start_page: 8
+      end_page: 10
     conclusion:
-      start_page: 9
+      start_page: 11
   default_phase: "conclusion"
 
+# --- Scene Settings --- #
 settings:
-  location: "A secret, enchanted meadow on the outskirts of Nia's village"
-  time_period: "Present day"
+  location: "A mystical forest lit by the glow of the full moon"  # Overall location.
+  time_period: "Present night"                                    # Overall time period.
   scene_progression:
     intro:
-      description: "A sunlit meadow with a gentle breeze and wildflowers in bloom"
-      atmosphere: "Bright and inviting with a touch of mystery"
+      description: "A quiet backyard bathed in the soft light of dusk."
+      atmosphere: "calm and full of gentle wonder."
       elements:
-        - "Fields of colorful flowers, fluttering butterflies, and a clear sky"
-        - "A winding dirt path leading into the heart of the meadow"
-      emotion: "curiosity and joy"
-      lighting: "warm sunlight with soft shadows"
-      mood: "peaceful and anticipatory"
-      visual_focus: "Nia's excited face and the inviting path"
-      color_palette: "vivid yellows and greens with splashes of floral colors"
-
-    magical_encounter:
-      description: "The meadow takes on a magical glow with gentle harmonies in the air"
-      atmosphere: "mysterious and enchanting"
+        - "Fading light, gentle shadows, and familiar surroundings"
+        - "A hint of the forest in the distance"
+      emotion: "curiosity and calm"
+      lighting: "soft twilight with warm hues"
+      mood: "intimate and inviting"
+      visual_focus: "Lila standing at her doorway, looking out"
+      color_palette: "warm pastels with soft blues"
+    discovery:
+      description: "Lila notices a mysterious, glowing path leading toward the forest."
+      atmosphere: "intriguing and slightly mysterious."
       elements:
-        - "Soft musical notes visualized as sparkling lights"
-        - "A slight shimmer covering the wildflowers"
-        - "A subtle shift in the colors to cooler, mystical tones"
-      emotion: "wonder and slight apprehension"
-      lighting: "twinkling light with hints of blue"
-      mood: "magical and curious"
-      visual_focus: "Nia pausing as she listens to the soft melody"
-      color_palette: "cool blues mingled with warm yellows"
-      transition_from_previous: "the ordinary meadow slowly embracing magic"
-
-    magical_guidance_meeting:
-      description: "Deep within the enchanted meadow where wildflowers glow and soft mists rise"
-      atmosphere: "magical and serene"
+        - "A glowing trail, subtle sparkles, and gentle luminescence"
+      emotion: "excitement and wonder"
+      lighting: "a gentle, ethereal glow"
+      mood: "mysterious and inviting"
+      visual_focus: "The glowing path under a starlit sky"
+      color_palette: "cool blues mixed with warm glows"
+      transition_from_previous: "The familiar backyard giving way to the allure of mystery"
+    mystery_encounter:
+      description: "Deep in the forest, Lila encounters the wise owl, Stella, perched in a silent watch."
+      atmosphere: "quiet and enigmatic."
       elements:
-        - "Clusters of glowing wildflowers"
-        - "A light mist dancing above the grass"
-        - "Ancient trees bordering the meadow with luminous patterns"
-      emotion: "amazement and delight"
-      lighting: "radiant glow from Whisp"
-      mood: "magical discovery"
-      visual_focus: "Nia's face illuminated by Whisp's gentle light"
-      color_palette: "pastel purples and soft blues with hints of golden glow"
-      transition_from_previous: "the soft melody revealing a magical presence"
-
-    magical_guidance_conversation:
-      description: "A quiet clearing surrounded by softly glowing flora"
-      atmosphere: "serene and welcoming"
+        - "Ancient trees, soft rustling leaves, and scattered moonbeams"
+      emotion: "surprise and attentive curiosity"
+      lighting: "subtle moonlight filtering through the canopy"
+      mood: "thoughtful and reverent"
+      visual_focus: "Stella watching from a high branch"
+      color_palette: "muted earth tones with luminous highlights"
+      transition_from_previous: "the glowing path leads to a secret encounter"
+    wise_guidance:
+      description: "Stella offers gentle guidance in the hush of the forest."
+      atmosphere: "reassuring and mystical."
       elements:
-        - "Gentle orbs of light hovering above"
-        - "A carpet of soft grass with scattered luminescent petals"
-        - "A ring of ancient stones with mysterious carvings"
-      emotion: "comfort mixed with wonder"
-      lighting: "a calm, soft glow centered on Whisp"
-      mood: "building trust"
-      visual_focus: "Whisp speaking softly while Nia listens intently"
-      color_palette: "subtle blues and greens with warm accents"
-      transition_from_previous: "the enchanted melody giving way to friendly conversation"
-
-    magical_guidance_trust:
-      description: "A sparkling brook with iridescent reflections"
-      atmosphere: "peaceful and magical"
+        - "Gnarled branches, soft luminescence, and quiet rustles"
+      emotion: "calm and respectful"
+      lighting: "focused moonlight on the pair"
+      mood: "intimate and encouraging"
+      visual_focus: "The conversation between Lila and Stella"
+      color_palette: "cool blues with hints of gold"
+      transition_from_previous: "from surprise to warm guidance"
+    quest_begin:
+      description: "Emboldened by Stella's words, Lila steps onto the mysterious path."
+      atmosphere: "determined and adventurous."
       elements:
-        - "A clear brook reflecting rainbow hues"
-        - "Glowing water lilies and gentle ripples"
-        - "Tiny magical creatures dancing near the water"
-      emotion: "a touch of worry slowly turning to trust"
-      lighting: "a mix of soft shadows and shimmering light"
-      mood: "vulnerable hope"
-      visual_focus: "Nia's careful expression and Whisp's reassuring gaze"
-      color_palette: "muted earth tones with hints of magical blue"
-      transition_from_previous: "the calm clearing evolving into a moment of gentle trust"
-
-    magical_guidance_journey:
-      description: "A winding path under a canopy of glittering trees"
-      atmosphere: "adventurous and magical"
+        - "A winding, glowing trail through shadowy trees"
+        - "Faint silhouettes of forest creatures"
+      emotion: "determination mixed with excitement"
+      lighting: "a clear, magical beam illuminating the path"
+      mood: "exciting and hopeful"
+      visual_focus: "Lila taking her first steps into the unknown"
+      color_palette: "vivid purples and soft pinks under moonlight"
+      transition_from_previous: "the gentle guidance sparks a bold journey"
+    magical_bridge:
+      description: "A shimmering, moonlit bridge appears over a quiet stream."
+      atmosphere: "magical and surreal."
       elements:
-        - "Trees whose leaves sparkle with dew"
-        - "Gentle beams of light piercing through the canopy"
-        - "A natural archway formed by intertwined branches"
-      emotion: "growing bravery and excitement"
-      lighting: "a luminous path marked by Whisp's guiding light"
-      mood: "exciting journey"
-      visual_focus: "Whisp leading and Nia following with determination"
-      color_palette: "rich greens and blues highlighted by radiant light"
-      transition_from_previous: "a steady trust giving way to an adventurous walk"
-
-    helping:
-      description: "A secluded corner of the meadow where brambles trap a tiny hedgehog"
-      atmosphere: "concern mixed with warmth"
-      elements:
-        - "Soft, focused lighting on the distressed hedgehog"
-        - "The meadow seemingly holding its breath as kindness unfolds"
-        - "Whisp watching with gentle encouragement"
-      emotion: "compassion and resolve"
-      lighting: "warm spotlight on the hedgehog"
-      mood: "empathetic urgency"
-      visual_focus: "Nia bending down to gently free the hedgehog"
-      color_palette: "warm oranges and soft blues"
-      transition_from_previous: "the journey pausing for a rescue"
-
-    celebration:
-      description: "The corner now filled with joyful energy as the hedgehog scampers free"
-      atmosphere: "joyful and magical"
-      elements:
-        - "Burst of sparkles celebrating the act of kindness"
-        - "The freed hedgehog happily exploring"
-        - "Whisp shining brighter in celebration"
-      emotion: "elation and fulfillment"
-      lighting: "vibrant, celebratory light"
-      mood: "triumphant warmth"
-      visual_focus: "Nia's delighted smile and the jubilant hedgehog"
-      color_palette: "bright golds and soft blues"
-      transition_from_previous: "the tension of rescue shifting into celebration"
-
-    farewell:
-      description: "A gentle meadow opening where the magical encounter begins to wane"
-      atmosphere: "touching and bittersweet"
-      elements:
-        - "Whisp slowly disappearing into the twilight glow"
-        - "The hedgehog safely exploring the meadow in the background"
-        - "The sky turning a gentle shade of purple as evening approaches"
-      emotion: "gratefulness and soft sorrow"
-      lighting: "soft twilight hues with a lingering glow"
-      mood: "heartfelt goodbye"
-      visual_focus: "Nia waving as Whisp fades into the dusk"
-      color_palette: "lavender and soft gold tones"
-      transition_from_previous: "the celebration gently giving way to farewell"
-
-    conclusion:
-      description: "Nia's cozy home with a welcoming garden, set against the fading light of the meadow"
-      atmosphere: "warm, peaceful, and familiar"
-      elements:
-        - "PROMINENT: A well-kept garden with blooming flowers and a small pathway"
-        - "CENTRAL: Nia's home, a charming house with bright windows"
-        - "BACKGROUND ONLY: The soft edge of the meadow, signifying the magic left behind"
-        - "FOREGROUND: Garden elements like a swing, potted plants, and a small bench"
-        - "SKY: A warm sunset with Whisp's faint sparkle in the distance"
-        - "MANDATORY: Clearly distinguish between home garden and the distant meadow"
-      transition_requirements:
-        from_meadow: true
-        emphasis: "home"
-        composition_guide: "70% garden, 30% meadow edge"
-        key_elements:
-          - "House must be clearly visible and prominent"
-          - "Garden should dominate the scene"
-          - "Meadow visible only as a soft backdrop"
-          - "Clear boundary between the enchanted meadow and the home"
+        - "A crystal-clear stream, glowing stepping stones, and a gentle mist"
+      emotion: "awe and cautious optimism"
+      lighting: "bright moonlight reflecting off the water"
+      mood: "magical challenge"
+      visual_focus: "Lila pausing in wonder before the bridge"
+      color_palette: "icy blues and silvery whites"
+      transition_from_previous: "the path reveals a surprising magical obstacle"
       reference_override:
-        ignore_elements:
-          - "Dense meadow"
-          - "Overwhelming magical effects (except distant Whisp)"
-          - "Meadow paths"
-        maintain_only:
-          - "Character designs"
-          - "Art style"
-          - "Color harmony"
-        force_elements:
-          - "Suburban garden setting"
-          - "House in background"
-          - "Typical garden features"
+        ignore_elements: # Ignore elements from page 5 that might conflict
+          - "forest path without stream"
+          - "dense trees blocking view of a stream"
+          - "scene without water features"
+        force_elements: # Force the core elements of page 6
+          - "prominent magical bridge"
+          - "visible stream under bridge"
+          - "glowing stepping stones forming bridge"
+          - "gentle mist near water"
+    deep_forest:
+      description: "Lila ventures deeper into the enchanted forest, where every shadow hints at magic."
+      atmosphere: "mysterious and rich with secrets."
+      elements:
+        - "Towering trees, sparkling dust motes, and soft shadows"
+      emotion: "focused and brave"
+      lighting: "dappled moonlight with soft glows from hidden flora"
+      mood: "adventurous and introspective"
+      visual_focus: "Lila moving steadily through the forest"
+      color_palette: "deep greens and blues with silver highlights"
+      transition_from_previous: "the magical bridge leads into a realm of deeper wonder"
+    rescue:
+      description: "In a small clearing, Lila finds a Moon Rabbit ensnared in enchanted brambles."
+      atmosphere: "tense yet hopeful."
+      elements:
+        - "Entwined vines, gentle stardust, and a distressed rabbit"
+      emotion: "compassion and urgency"
+      lighting: "a focused beam highlighting the trapped rabbit"
+      mood: "emergency softened by care"
+      visual_focus: "Lila bending down to free the Moon Rabbit"
+      color_palette: "warm oranges mixed with cool blues"
+      transition_from_previous: "the deep forest reveals a moment of rescue"
+    celebration:
+      description: "Freed from its bonds, the Moon Rabbit hops away, leaving a trail of sparkling stardust."
+      atmosphere: "joyful and uplifting."
+      elements:
+        - "Dancing stardust, soft glowing trails, and a freed rabbit"
+      emotion: "joy and relief"
+      lighting: "a burst of moonlight reflecting off the stardust"
+      mood: "celebratory and heartwarming"
+      visual_focus: "The joyful leap of the Moon Rabbit as Lila watches happily"
+      color_palette: "bright silvers and pastel hues"
+      transition_from_previous: "rescue turning into a moment of celebration"
+    farewell:
+      description: "As the night deepens, Lila bid farewell to Stella and the enchanted forest."
+      atmosphere: "bittersweet and reflective."
+      elements:
+        - "Long shadows, gentle parting glances, and soft, fading light"
+      emotion: "melancholic yet grateful"
+      lighting: "dim moonlight with warm undertones"
+      mood: "touching goodbye"
+      visual_focus: "Lila waving goodbye as Stella retreats into the night"
+      color_palette: "deep blues with hints of warm gold"
+      transition_from_previous: "the celebration softens into farewell"
+    reflective:
+      description: "Lila pauses on a quiet path, reflecting on her magical adventure under the glow of the moon."
+      atmosphere: "quiet and introspective."
+      elements:
+        - "A solitary path, reflective puddles, and whispering leaves"
+      emotion: "thoughtfulness and satisfaction"
+      lighting: "a soft, contemplative glow"
+      mood: "peaceful reflection"
+      visual_focus: "Lila gazing into the distance with a pensive expression"
+      color_palette: "muted tones with gentle highlights"
+      transition_from_previous: "farewell gives way to quiet introspection"
+    transition_home:
+      description: "The forest begins to lighten as Lila approaches the edge where magic meets home."
+      atmosphere: "transitional and hopeful."
+      elements:
+        - "Fading forest details blending into a suburban garden edge"
+      emotion: "anticipation and calm"
+      lighting: "subtle hints of early dawn merging with moonlight"
+      mood: "soft transition"
+      visual_focus: "The boundary between the enchanted forest and home"
+      color_palette: "cool blues and warm garden tones"
+      transition_from_previous: "the reflective moment transitions toward homecoming"
+    homecoming:
+      description: "Lila returns to a welcoming home with a heart full of magical memories."
+      atmosphere: "warm and secure."
+      elements:
+        - "A cozy house, a friendly garden, and lingering night sky hues"
+      emotion: "content and inspired"
+      lighting: "gentle morning light mixing with the last traces of moonlight"
+      mood: "joyfully concluding"
+      visual_focus: "Lila entering her home with a soft smile"
+      color_palette: "warm yellows, soft pinks, and gentle blues"
+      transition_from_previous: "the transition home becomes a comforting reunion"
+    lingering_goodbye:
+      description: "A final glance back at the fading forest as Lila embraces the new day."
+      atmosphere: "bittersweet and nostalgic."
+      elements:
+        - "A lingering silhouette of the forest and soft, parting light"
+      emotion: "soft farewell and lingering wonder"
+      lighting: "dim yet warm as night yields to day"
+      mood: "poignant goodbye"
+      visual_focus: "Lila's silhouette against the twilight of the forest"
+      color_palette: "lavender, deep blue, and gentle gold"
+      transition_from_previous: "homecoming softly gives way to a final goodbye"
+    conclusion:
+      description: "In the full light of day, Lila reflects on her unforgettable quest and the magic that will always be with her."
+      atmosphere: "uplifting and reflective."
+      elements:
+        - "A bright home, a clear sky, and subtle hints of the magical night behind"
+      emotion: "inspired and fulfilled"
+      lighting: "warm daylight with soft shadows"
+      mood: "conclusive and hopeful"
+      visual_focus: "Lila's peaceful, content expression as she looks ahead"
+      color_palette: "bright yellows, gentle pinks, and clear blues"
+      transition_from_previous: "the lingering goodbye evolves into a hopeful new beginning"
 
+# --- Story Text and Beats --- #
 story:
   pages:
-    - "Nia loved wandering through the vibrant meadow near her home. One sunny day, she discovered a hidden path she hadn't seen before."
-    - "Following the path, a soft, melodious tune floated on the breeze, whispering secrets of the meadow."
-    - "Nia looked up and saw a glowing deer with luminous antlers emerging from the light. 'Who are you?' she whispered in awe."
-    - "The deer replied in a gentle, soothing tone, 'I am Whisp, a guardian of this enchanted place, here to guide lost hearts.'"
-    - "Realizing she might be straying too far, Nia asked, 'Can you help me find my way home?' with a mix of worry and hope."
-    - "With graceful steps, Whisp led Nia along a path lined with sparkling wildflowers and shimmering dewdrops."
-    - "Soon, they found a little hedgehog caught in prickly brambles. 'Let's help him,' Nia said as she carefully freed the creature."
-    - "Whisp's eyes gleamed with delight as the hedgehog scurried away joyfully, celebrating the kindness shown."
-    - "As twilight approached, Nia spotted her familiar garden. 'Thank you, Whisp!' she called, watching the deer fade into the gentle dusk."
-    - "Back at home, Nia felt a warm glow in her heart. The meadow had shared its magic, and the lesson of friendship shone brighter than ever."
+    - "Lila gazed out from her backyard as dusk settled, feeling the first stirrings of an unspoken adventure."
+    - "A mysterious, glowing trail appeared at the edge of the familiar, beckoning her toward the ancient forest."
+    - "Venturing along the path, she encountered a wise owl named Stella, silently watching from a gnarled branch."
+    - "Stella spoke in soft, reassuring tones, sharing secrets of the forest and igniting Lila's courage."
+    - "Emboldened by the guidance, Lila stepped onto the glowing path with cautious excitement."
+    - "The trail led her to a shimmering, moonlit bridge arching gracefully over a quiet stream."
+    - "With every step, the forest grew denser, alive with whispered tales and hidden magic."
+    - "In a small clearing, Lila discovered a timid Moon Rabbit ensnared in enchanted brambles."
+    - "With gentle care, she freed the rabbit, which soon hopped away, leaving a sparkling trail of stardust."
+    - "As the night deepened, Lila bid a heartfelt farewell to Stella and the magical forest."
+    - "She paused on a quiet path, reflecting on the wonders she had witnessed under the moonlit sky."
+    - "Approaching the edge of the forest, the magic began to yield to the first hints of dawn."
+    - "Returning to her cozy home, Lila embraced the comfort of familiarity and the glow of newfound memories."
+    - "Before stepping fully inside, she cast one last, lingering glance at the fading forest."
+    - "In the full light of day, Lila carried the magic of her quest in her heart, forever inspired by the night."
   story_beats:
-    intro: "Set the stage with discovery and the wonder of a hidden path in a bright meadow"
-    magical_encounter: "Introduce the first hints of magic through a soft melody and enchanting light"
-    magical_guidance: "Develop the bond between Nia and Whisp as trust and guidance blossom"
-    helping: "Highlight Nia's caring act of freeing the hedgehog, emphasizing empathy"
-    celebration: "Celebrate the act of kindness with the hedgehog's joyful freedom"
-    farewell: "Create a touching goodbye as Whisp fades into the twilight"
-    conclusion: "Conclude with the warmth of home and the lingering magic of the meadow"
+    intro: "Introduce Lila and set the stage in her familiar, yet gently mysterious world."
+    discovery: "Reveal the mysterious glowing path and spark the promise of adventure."
+    mystery_encounter: "Introduce Stella, the wise owl, as a gentle guide."
+    wise_guidance: "Let Stella share forest secrets, preparing Lila for her journey."
+    quest_begin: "Lila embarks on the trail with a mix of excitement and trepidation."
+    magical_bridge: "Introduce the magical obstacle—a shimmering bridge over a quiet stream."
+    deep_forest: "Deepen the mystery with the enchanting and dense forest."
+    rescue: "Highlight Lila's compassionate rescue of the trapped Moon Rabbit."
+    celebration: "Celebrate the freeing moment with sparkling stardust and joy."
+    farewell: "Capture the bittersweet farewell as the night deepens."
+    reflective: "Allow Lila a moment of introspection under the soft glow of the moon."
+    transition_home: "Show the gentle shift from magical forest to a welcoming home."
+    homecoming: "Celebrate Lila's return to safety with the warmth of home."
+    lingering_goodbye: "Emphasize a final, poignant look back at the fading magic."
+    conclusion: "Conclude with Lila inspired and fulfilled, carrying the magic in her heart."
 
-page_emotions:
-  1:
-    emotion: "curiosity and joy"
-    lighting: "warm sunlight with soft shadows"
-    mood: "peaceful anticipation"
-    visual_focus: "Nia's excited face and the winding path"
-    color_palette: "vivid yellows and lush greens"
-  2:
-    emotion: "wonder and slight apprehension"
-    lighting: "twinkling light with hints of blue"
-    mood: "magical curiosity"
-    visual_focus: "Nia pausing as she listens to the mysterious melody"
-    color_palette: "cool blues mingled with warm yellows"
-    transition_from_previous: "the ordinary meadow slowly embracing magic"
-  3:
-    emotion: "amazement and delight"
-    lighting: "radiant glow from Whisp"
-    mood: "magical discovery"
-    visual_focus: "Nia's face lit by Whisp's gentle radiance"
-    color_palette: "pastel purples and soft blues with hints of gold"
-    transition_from_previous: "the melody unveiling a magical presence"
-  4:
-    emotion: "comfort mixed with wonder"
-    lighting: "a calm, soft glow centered on Whisp"
-    mood: "beginning trust"
-    visual_focus: "Whisp speaking softly as Nia listens intently"
-    color_palette: "subtle blues and greens with warm accents"
-    transition_from_previous: "the magical encounter deepening into a gentle conversation"
-  5:
-    emotion: "anxious yet hopeful"
-    lighting: "a mix of soft shadows and shimmering light"
-    mood: "vulnerable trust"
-    visual_focus: "Nia's careful, slightly worried look paired with Whisp's calming presence"
-    color_palette: "muted earth tones with hints of magical blue"
-    transition_from_previous: "the gentle conversation leading to a moment of realization"
-  6:
-    emotion: "brave and determined"
-    lighting: "a luminous path marked by Whisp's guiding light"
-    mood: "exciting journey"
-    visual_focus: "Whisp leading and Nia following with resolve"
-    color_palette: "rich greens and blues with radiant highlights"
-    transition_from_previous: "the trust turning into a shared adventure"
-  7:
-    emotion: "compassion and resolve"
-    lighting: "focused warm light on the distressed hedgehog"
-    mood: "empathetic action"
-    visual_focus: "Nia bending down to carefully free the hedgehog"
-    color_palette: "warm oranges with soft blues"
-    transition_from_previous: "the journey pausing for a rescue"
-  8:
-    emotion: "elation and fulfillment"
-    lighting: "vibrant, celebratory light"
-    mood: "joyful triumph"
-    visual_focus: "Nia's delighted smile and the happy hedgehog"
-    color_palette: "bright golds and soft blues"
-    transition_from_previous: "the act of kindness giving way to celebration"
-  9:
-    emotion: "grateful and bittersweet"
-    lighting: "soft twilight hues with lingering glow"
-    mood: "heartfelt farewell"
-    visual_focus: "Nia waving as Whisp fades into the dusk"
-    color_palette: "lavender and gentle gold tones"
-    transition_from_previous: "celebration softly shifting to farewell"
-  10:
-    emotion: "content and inspired"
-    lighting: "warm sunset light"
-    mood: "peaceful conclusion"
-    visual_focus: "Nia at her home with a glowing garden, and a hint of Whisp in the distance"
-    color_palette: "warm home tones with subtle magical remnants"
-    transition_from_previous: "the enchanted meadow merging into the warmth of home"
-
-character_emotions:
-  Nia:
-    1: "curious and eager"
-    2: "intrigued and slightly cautious"
-    3: "awestruck and delighted"
-    4: "engaged and hopeful"
-    5: "anxious but trusting"
-    6: "determined and brave"
-    7: "compassionate and proactive"
-    8: "joyful and proud"
-    9: "bittersweet with farewell"
-    10: "content and inspired"
-  Whisp:
-    3: "mysterious yet gentle"
-    4: "caring and reassuring"
-    5: "empathetic and encouraging"
-    6: "leading with quiet strength"
-    7: "approving and joyful"
-    8: "radiant with pride"
-    9: "ethereal and tender during farewell"
-    10: "a lingering presence of calm"
-  Meadow_Hedgehog:
-    7: "frightened yet hopeful"
-    8: "relieved and thankful"
-    9: "playful and liberated"
-    10: "content within the serene meadow"
-
-visual_transitions:
-  1_to_2: "meadow gradually shifting to an enchanted ambiance, hints of magical light emerging"
-  2_to_3: "the soft melody unveils Whisp as the magical deer"
-  3_to_4: "initial magical encounter transitioning into a gentle conversation"
-  4_to_5: "Nia's realization of being far from home deepening her trust"
-  5_to_6: "from stationary reflection to an active, guided journey"
-  6_to_7: "the adventure paused for the rescue of the hedgehog"
-  7_to_8: "the tension of rescue transitioning to a jubilant celebration"
-  8_to_9: "the joyous moment giving way to a gentle farewell"
-  9_to_10: "the enchanted meadow softly merging into the familiar warmth of home"
-
-magical_guidance:
-  start_page: 3
-  end_page: 6
-  variations:
-    3:
-      description: "deep within the enchanted meadow with glowing wildflowers and soft mists"
-      atmosphere: "magical and serene"
-      elements:
-        - "Clusters of glowing wildflowers"
-        - "A light mist dancing above the grass"
-        - "Ancient trees bordering the meadow with luminous markings"
-    4:
-      description: "a quiet clearing bathed in gentle orbs of light"
-      atmosphere: "calming and otherworldly"
-      elements:
-        - "Floating orbs of soft light"
-        - "Carpet of luminescent petals"
-        - "Circle of ancient stones with mysterious carvings"
-    5:
-      description: "a sparkling brook with iridescent reflections"
-      atmosphere: "peaceful and magical"
-      elements:
-        - "Clear brook reflecting rainbow hues"
-        - "Glowing water lilies and shimmering ripples"
-        - "Tiny magical sprites dancing near the water"
-    6:
-      description: "a winding path under a canopy of glittering leaves"
-      atmosphere: "adventurous and magical"
-      elements:
-        - "Trees with dew-sparkled leaves"
-        - "Gentle beams of light piercing through the branches"
-        - "A natural archway formed by intertwining branches"
-
+# --- Environment Definitions (Advanced) --- #
 environment_types:
   forest:
-    indicators:
-      - forest
-      - trees
-      - leaves
-      - path
-      - woods
-    characteristics:
-      - natural
-      - organic
-      - outdoor
-    lighting_defaults:
-      - dappled sunlight
-      - forest shade
-      - natural light
-  magical_forest:
-    indicators:
-      - glowing
-      - ethereal
-      - magical
-      - enchanted
-      - mystical
-    characteristics:
-      - supernatural
-      - luminescent
-      - mysterious
-    lighting_defaults:
-      - magical glow
-      - ethereal light
-      - bioluminescence
+    indicators: [trees, leaves, path, woods, ancient]
+    characteristics: [natural, organic, outdoor]
+    lighting_defaults: [moonlight, soft shadows, natural glow]
+  enchanted_forest:
+    indicators: [glowing, mystical, magical, ethereal]
+    characteristics: [supernatural, luminescent, mysterious]
+    lighting_defaults: [ethereal light, bioluminescence, shimmering glow]
   home:
-    indicators:
-      - house
-      - yard
-      - backyard
-      - garden
-      - home
-    characteristics:
-      - domestic
-      - familiar
-      - safe
-    lighting_defaults:
-      - warm indoor light
-      - natural daylight
-      - golden hour
+    indicators: [house, garden, backyard, home]
+    characteristics: [domestic, safe, familiar]
+    lighting_defaults: [warm morning light, gentle indoor light, golden hues]
 
+# --- Transition Rules (Advanced) --- #
 transition_rules:
-  forest_to_magical_forest:
-    composition: "60% magical, 40% natural meadow"
+  forest_to_enchanted:
+    composition: "60% enchanted, 40% natural forest"
     emphasis: "magical elements"
-    maintain:
-      - basic meadow structure
-      - trees and wildflowers
-      - path layout
-    introduce:
-      - magical lighting
-      - glowing elements
-      - ethereal ambiance
-    phase_out:
-      - ordinary meadow elements
-      - mundane lighting
-    
-  magical_forest_to_home:
-    composition: "70% home, 30% magical meadow"
-    emphasis: "home environment"
-    maintain:
-      - character designs
-      - art style
-      - color harmony
-    introduce:
-      - domestic elements
-      - familiar garden structures
-      - typical yard features
-    phase_out:
-      - magical elements
-      - dense meadow details
-      - ethereal effects
+    maintain: [forest structure, trees, natural paths]
+    introduce: [glowing effects, ethereal ambiance, mystical lighting]
+    phase_out: [mundane forest details]
+  enchanted_to_home:
+    composition: "70% home, 30% enchanted forest remnants"
+    emphasis: "domestic comfort"
+    maintain: [character designs, art style, color harmony]
+    introduce: [familiar home elements, garden details]
+    phase_out: [magical overlays, dense forest elements]
 
+# --- Environment Transitions (Advanced) --- #
 environment_transitions:
-  default:
-    steps: 3
-    blend_ratio: "60-40"
-    maintain_core_elements: true
+  default: { steps: 3, blend_ratio: "60-40", maintain_core_elements: true }
   specific:
-    forest_to_magical:
-      steps: 2
-      blend_ratio: "70-30"
-      emphasis: "magical"
-    magical_to_normal:
-      steps: 4
-      blend_ratio: "80-20"
-      emphasis: "normal"
+    forest_to_enchanted: { steps: 2, blend_ratio: "70-30", emphasis: "magical" }
+    enchanted_to_home: { steps: 4, blend_ratio: "80-20", emphasis: "normal" }
 
+# --- Generation Process Control --- #
 generation:
   temperature:
-    base: 0.2
-    phase_increment: 0.3
+    base: 0.25
+    phase_increment: 0.25
     max: 0.5
   steps:
-    - "Create the scene background based on requirements."
-    - "Leave the scene EMPTY of characters initially."
-    - "Add EACH character ONE at a time, ensuring NO duplication occurs."
-    - "Position characters to clearly depict the story actions."
+    - "Generate the background scene based on phase details."
+    - "Leave the scene initially free of characters."
+    - "Introduce each character one by one, ensuring uniqueness and consistency."
+    - "Position characters to clearly represent their story actions."
   anti_duplication_rules:
     rules:
       - "NO DUPLICATES: Each character appears EXACTLY ONCE"
-      - "TOTAL COUNT: The image contains EXACTLY {num_characters} character(s) total"
-      - "VERIFY AGAIN: Before finalizing, count each character to ensure NO duplicates"
-      - "FORBIDDEN: Multiple versions of the same character are strictly prohibited"
-      - "NEGATIVE PROMPT: DO NOT create twins, clones, reflections, or similar-looking characters"
+      - "TOTAL COUNT: The image contains EXACTLY {num_characters} character(s)"
+      - "VERIFY AGAIN: Ensure no character is duplicated"
+      - "FORBIDDEN: Avoid twins, clones, reflections, or similar versions"
+      - "NEGATIVE PROMPT: No duplicate appearances allowed"
     consistency_rules:
-      - "Maintain EXACT SAME physical proportions for each character (height, build, size)"
-      - "Keep facial features identical while allowing appropriate emotional expressions"
-      - "Ensure each character remains visually distinct from others"
-      - "For newly introduced characters, establish a clear visual identity that will be maintained"
+      - "Maintain consistent proportions, facial features, and attire for each character across all pages"
+      - "Ensure the main character's design (Lila) remains identical on every page"
     flexibility_rules:
-      - "Emotional expressions appropriate to the current scene"
-      - "Character positioning/arrangement according to current story actions"
-      - "Character interactions with scene-specific elements"
+      - "Allow natural emotional expressions per scene"
+      - "Adapt character positioning to suit scene actions"
     verification_rules:
-      - "Each character appears EXACTLY ONCE (count: exactly 1)"
-      - "No character is duplicated or appears twice"
+      - "Confirm each character appears exactly once per scene"
+      - "No duplication in character representation"
       - "Total character count: exactly {num_characters}"
-      - "Story actions are clearly depicted"
-      - "Character proportions and features are consistent"
+      - "Ensure story actions are clearly depicted"
   art_style:
-    tone: "Bright, child-friendly colors"
-    quality: "High detail, clean lines"
+    tone: "Dreamy, magical, and child-friendly"
+    quality: "High detail with soft, whimsical lines"
     text_policy: "NO text elements in the image"
     format: "SQUARE image ({width}x{height} pixels)"
 
+# --- Scene Management Details --- #
 scene_management:
   special_character_introductions:
-    supporting_character2:
-      page: 7
-      character_type: "hedgehog"
+    supporting_character: { page: 3, character_type: "owl" }
+    moon_rabbit:         { page: 8, character_type: "rabbit" }
   reference_page:
     similarity_threshold: 0.7
   story_phase_fallback:
     introduction:
-      end_page: 2
+      end_page: 3
     rising_action:
-      start_page: 3
-      end_page: 5
+      start_page: 4
+      end_page: 7
     climax:
-      start_page: 6
-      end_page: 8
+      start_page: 8
+      end_page: 10
     conclusion:
-      start_page: 9
+      start_page: 11
   default_phase: "conclusion"
 
-# Output format preferences
+# --- Output Format Preferences --- #
 output_formats:
-  pdf: true
+  pdf: false
   epub: true
   html: true
-  text: true
+  text: false
 
 # --- Metadata for Production --- #
 metadata:
-  language: "en-US"  # Language code (e.g., en-US, es-ES)
-  author: "Amer DK" # Author name (can override cover_author if needed)
-  publisher: "Self-Published" # Publisher name
-  isbn: ""  # International Standard Book Number (optional, leave blank if none)
-  description: "A wonderful children's story about adventure and friendship." # Book blurb/summary
-  keywords: "childrens book, story, adventure, friendship, AI generated" # Comma-separated keywords
-  publication_year: "" # Year of publication (e.g., 2025). Leave blank to auto-fill current year.
-  rights: "All rights reserved" # Copyright/rights statement
+  language: "en-US"
+  author: "Amer"
+  publisher: "Self-Published"
+  isbn: ""
+  description: "A magical tale of mystery and adventure as Lila embarks on a moonlit quest, discovering friendship and courage in an enchanted forest."
+  keywords: "children's book, adventure, mystery, magic, moonlit quest, AI generated"
+  publication_year: ""
+  rights: "All rights reserved"
 
 # --- KDP Print Formatting Settings --- #
 print_settings:
-  # Trim Size (the final size of the book page after cutting)
   trim_width: 8.5
   trim_height: 8.5
-  unit: "inch" # or "mm"
-
-  # Bleed (content extending beyond the trim line)
-  has_bleed: true # Set to true if images/elements touch the page edge
-  bleed_amount: 0.125 # Standard KDP bleed in 'unit' (e.g., 0.125 inches)
-
-  # Margins (safe area within the trim lines)
+  unit: "inch"
+  has_bleed: true
+  bleed_amount: 0.125
   margin_top: 0.5
   margin_bottom: 0.5
-  margin_inside: 0.75 # Gutter margin (larger for binding)
+  margin_inside: 0.75
   margin_outside: 0.5
-  # margin_unit is the same as 'unit' above
-
-  # Paper Type (affects spine width for cover calculation later)
-  paper_type: "white" # "white", "cream", or "color"
-
-  # Image DPI Target (for reference, actual image size depends on API/source)
+  paper_type: "white"
   target_dpi: 300
 
-# Cover generation settings
+# --- Cover Generation Settings --- #
 cover:
-  generate_cover: false  # Set to false to skip cover generation
-  # Prompt template for the cover image. Placeholders like {title}, {characters}, {theme}, {art_style} will be replaced.
-  cover_prompt_template: "A vibrant book cover illustration for a children's book featuring {characters}. The main theme is {theme}. Maintain the art style: {art_style}. IMPORTANT: Do NOT include any text, letters, or words in the image."
-  cover_title: "" # Leave empty to use book_details.title, or specify a different title for the cover
-  cover_author: "By Amer" # Specify the author name for the cover
-  cover_text_position: "middle" # Position for title/author overlay: "top", "middle", "bottom"
-  reference_page_for_style: 1 # Which page number's image to use as a style reference for the cover generation
-  cover_text_color: "#000000" 
-# Checkpoint and logging settings
-# ... existing code ...
+  generate_cover: false
+  cover_prompt_template: "A captivating book cover illustration for a children's book featuring {characters}. The main theme is {theme}. Maintain the art style: {art_style}. IMPORTANT: Do NOT include any text in the image."
+  cover_title: ""
+  cover_author: "By Amer"
+  cover_text_position: "top"
+  reference_page_for_style: 1
+  cover_text_color: "#000000"
+
+# --- Checkpoint and Logging Settings (Internal Use) --- #
+# checkpoint_manager:
+#   save_interval: 5
+#   resume_from_checkpoint: true
+# logging:
+#   level: "INFO"
+#   log_file: "generation.log"

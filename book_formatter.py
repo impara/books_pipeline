@@ -423,7 +423,7 @@ class BookFormatter:
             img_item_name = page_images[page_num-1] if page_num <= len(page_images) else None
             img_tag = f'<img src="{img_item_name}" alt="Illustration for page {page_num}"/>' if img_item_name else "<!-- Image not available -->"
 
-            # Create chapter HTML
+            # Create chapter HTML containing only the image
             chapter_html = f"""
             <?xml version='1.0' encoding='utf-8'?>
             <!DOCTYPE html>
@@ -431,27 +431,28 @@ class BookFormatter:
             <head>
                 <title>Page {page_num}</title>
                 <style>
+                    /* Basic styling for image-only pages */
                     body {{ margin: 0; padding: 0; }}
-                    img {{ display: block; max-width: 100%; max-height: 95vh; margin: auto; }}
-                    /* Optional: Hide text if overlay is already on image */
-                    .text {{ display: none; }}
-                    /* Optional: Add page number if needed */
-                    .page-number {{ text-align: center; font-size: 0.8em; color: #888; padding-top: 5px; }}
+                    img {{ display: block; max-width: 100%; max-height: 98vh; margin: auto; /* Centered, fills most of the view height */ }}
                 </style>
             </head>
             <body>
                 {img_tag}
-                <!-- <div class="page-number">{page_num}</div> -->
+                <!-- Text paragraph removed as text is overlaid on the image -->
+                <!-- Page number can be added if desired, but often omitted in picture books -->
+                <!-- <div style="text-align: center; font-size: 0.8em; color: #888;">{page_num}</div> -->
             </body>
             </html>
             """
             
-            chapter = epub.EpubHtml(title=f'Page {page_num}', file_name=f'page_{page_num:02d}.xhtml', content=chapter_html, lang='en')
+            # Use first few words of text for a more meaningful TOC title
+            toc_title = ' '.join(story_text.split()[:5]) + '...' if story_text else f'Page {page_num}'
+            chapter = epub.EpubHtml(title=toc_title, file_name=f'page_{page_num:02d}.xhtml', content=chapter_html, lang='en')
             book.add_item(chapter)
             chapters.append(chapter)
             book.spine.append(chapter) # Add chapter to spine
         
-        # Define Table of Contents
+        # Define Table of Contents using the generated chapters with better titles
         book.toc = chapters
         
         # Add default NCX and Nav file

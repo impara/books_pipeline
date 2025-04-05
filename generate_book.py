@@ -512,7 +512,8 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             anti_duplication_rules = self._get_anti_duplication_rules(len(required_characters), required_characters)
             
             # Build the final prompt
-            final_prompt = self._build_final_image_prompt(
+            # NOTE: The core prompt text is built here. Reference image is added later by api_client if provided.
+            final_prompt_text = self._build_final_image_prompt(
                 page_number,
                 self._create_scene_analysis(required_characters, scene_requirements, prompt_text, ""),
                 self._get_generation_steps(),
@@ -522,9 +523,31 @@ ONLY provide the exact text for the page - no additional commentary or descripti
                 character_instructions,
                 anti_duplication_rules
             )
+
+            # --- Determine and load reference image --- #
+            reference_image_b64 = None
+            reference_page_num = self._find_most_recent_image_page(page_number)
+            if reference_page_num:
+                ref_image_path = self.original_image_files.get(reference_page_num)
+                if ref_image_path and os.path.exists(ref_image_path):
+                    try:
+                        with open(ref_image_path, 'rb') as f:
+                            image_data = f.read()
+                        reference_image_b64 = base64.b64encode(image_data).decode('utf-8')
+                        logger.info(f"Loaded reference image from page {reference_page_num} for page {page_number}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference image from {ref_image_path}: {e}")
+                else:
+                    logger.warning(f"Reference image path for page {reference_page_num} not found or file missing.")
+            # --- End reference image loading --- #
             
-            # Generate the image using the API client
-            response = self.api_client.generate_image(final_prompt)
+            # Generate the image using the API client, passing the reference image data
+            response = self.api_client.generate_image(
+                prompt_text=final_prompt_text, 
+                reference_image_b64=reference_image_b64,
+                page_number=page_number,
+                scene_requirements=scene_requirements
+            )
             
             # Process and save the images
             image_count = self._process_and_save_images(response, page_number, prompt_text)
@@ -1231,8 +1254,8 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             # Add the guidance text
             prompt_parts.append({"text": "\n".join(guidance)})
             
-            # Add specific instruction to prioritize reference image consistency
-            prompt_parts.append({"text": "\n**CRITICAL CONSISTENCY NOTE:** Prioritize matching the character appearances (features, clothing, style) EXACTLY as shown in the reference image above. Use the character rules only as secondary guidance if the reference is unclear."})
+            # Add specific instruction on how to use the reference image vs. text rules
+            prompt_parts.append({"text": "\n**CRITICAL CONSISTENCY NOTE:** Use the text-based \"CHARACTER INSTRUCTIONS\" (especially rules marked with \"ALWAYS\") as the PRIMARY source for character appearance details (features, clothing, colors). Use the reference image below MAINLY for overall style, color palette, character placement, and general visual guidance. If the reference image contradicts a specific \"ALWAYS\" rule in the text, FOLLOW THE TEXT RULE."})
 
             # Add the reference image
             prompt_parts.append({
