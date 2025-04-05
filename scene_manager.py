@@ -216,8 +216,29 @@ class SceneManager:
         return None
         
     def get_page_emotions(self, page_number: int) -> dict:
-        """Get emotional and visual cues for a page."""
-        return self.page_emotions.get(str(page_number), {})
+        """Get emotional and visual cues for a page by looking up the page's phase 
+           and retrieving data from settings.scene_progression."""
+        story_phase = self._get_story_phase(page_number)
+        if not story_phase:
+            logger.warning(f"Could not determine story phase for page {page_number}. Returning empty emotions.")
+            return {}
+            
+        phase_details = self.config.get('settings', {}).get('scene_progression', {}).get(story_phase, {})
+        
+        # Extract the relevant keys
+        emotion_data = {
+            'emotion': phase_details.get('emotion', ''),
+            'lighting': phase_details.get('lighting', ''),
+            'mood': phase_details.get('mood', ''),
+            'visual_focus': phase_details.get('visual_focus', ''),
+            'color_palette': phase_details.get('color_palette', ''),
+            'transition_from_previous': phase_details.get('transition_from_previous', '') # Keep this if used
+        }
+        
+        # Filter out empty values if desired, but usually better to return the structure
+        # emotion_data = {k: v for k, v in emotion_data.items() if v}
+        
+        return emotion_data
         
     def _get_environment_type(self, scene_info: dict) -> str:
         """Get environment type for a scene using TransitionManager's logic."""
@@ -247,23 +268,31 @@ class SceneManager:
         return basic_action
 
     def get_character_emotions(self, page_number: int) -> dict:
-        """Get character emotions for a specific page."""
+        """Get character emotions for a specific page by retrieving them from 
+           each character's configuration in config['characters']."""
         page_str = str(page_number)
         character_emotions = {}
         
-        # Check if character emotions are defined in the config
-        if 'character_emotions' in self.config:
-            emotions_config = self.config['character_emotions']
-        elif 'story' in self.config and 'character_emotions' in self.config['story']:
-            emotions_config = self.config['story']['character_emotions']
-        else:
-            return character_emotions
-        
-        # Extract emotions for the current page
-        for char_name, emotions in emotions_config.items():
-            if page_str in emotions:
-                character_emotions[char_name] = emotions[page_str]
-        
+        # Get characters required for this page to avoid unnecessary lookups
+        # Note: This might require _get_required_characters to be efficient
+        #       or potentially passing the characters list as an argument.
+        #       For simplicity now, we iterate through all characters in config.
+        required_characters_on_page = self._get_required_characters(page_number)
+
+        for char_type, char_data in self.config.get('characters', {}).items():
+            char_name = char_data.get('name')
+            if not char_name or char_name not in required_characters_on_page:
+                continue # Skip if no name or not on this page
+                
+            # Get the emotional states defined for this character
+            emotional_states = char_data.get('emotional_states', {})
+            
+            # Check if an emotion is defined for the current page (using page number as string key)
+            if page_str in emotional_states:
+                character_emotions[char_name] = emotional_states[page_str]
+            # else: # Optionally log if no emotion is found for an active character
+            #    logger.debug(f"No specific emotion found for character '{char_name}' on page {page_number}.")
+
         return character_emotions
 
     def get_visual_transition(self, from_page: int, to_page: int) -> str:
@@ -302,7 +331,7 @@ CHARACTER EMOTIONAL STATES:
         
         # If reference page provided, include transition information
         reference_emotions = self.get_page_emotions(reference_page)
-        visual_transition = self.get_visual_transition(reference_page, page_number)
+        # visual_transition = self.get_visual_transition(reference_page, page_number) # Removed as visual_transitions config is removed
         
         # Get story phases for context
         current_phase = self._get_story_phase(page_number)
@@ -319,7 +348,7 @@ CHARACTER EMOTIONAL STATES:
         guidance = f"""EMOTIONAL TRANSITION:
 - Previous page emotion: {reference_emotions.get('emotion', 'Not specified')}
 - Current page emotion: {current_emotions.get('emotion', 'Not specified')}
-- Emotional progression: {current_emotions.get('transition_from_previous', visual_transition)}
+- Emotional progression: {current_emotions.get('transition_from_previous', 'N/A')}
 - Relationship: {relationship} page {reference_page}
 
 LIGHTING AND ATMOSPHERE:
@@ -337,8 +366,9 @@ VISUAL FOCUS:
 CHARACTER EMOTIONAL STATES:
 {chr(10).join(char_emotions_text) if char_emotions_text else "- No specific emotional states defined"}
 
-SPECIFIC VISUAL TRANSITION:
-{visual_transition}"""
+# REMOVED SPECIFIC VISUAL TRANSITION section
+# SPECIFIC VISUAL TRANSITION:
+# {visual_transition}"""
         
         return guidance
 

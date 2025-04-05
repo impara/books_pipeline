@@ -441,7 +441,6 @@ class BookFormatter:
             </head>
             <body>
                 {img_tag}
-                <div class="text">{story_text}</div>
                 <!-- <div class="page-number">{page_num}</div> -->
             </body>
             </html>
@@ -546,14 +545,19 @@ class BookFormatter:
             Dictionary mapping format names to their file paths
         """
         formats = {}
-        
+        output_config = self.config.get('output_formats', {})
+
         try:
-            formats['html'] = self.create_html_book()
-            formats['pdf'] = self.create_pdf_book()
-            formats['epub'] = self.create_epub_book()
-            formats['text'] = self.create_text_book()
+            if output_config.get('html', False):
+                formats['html'] = self.create_html_book()
+            if output_config.get('pdf', False):
+                formats['pdf'] = self.create_pdf_book()
+            if output_config.get('epub', False):
+                formats['epub'] = self.create_epub_book()
+            if output_config.get('text', False):
+                formats['text'] = self.create_text_book()
         except Exception as e:
-            logger.error(f"Error creating book formats: {e}")
+            logger.error(f"Error creating requested book formats: {e}")
             raise
         
         return formats 

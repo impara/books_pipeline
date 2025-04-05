@@ -614,16 +614,25 @@ ONLY provide the exact text for the page - no additional commentary or descripti
             if page_number < intro_page:
                 continue
                 
-            # Check if character has actions for this phase
-            if char_info.get('actions', {}).get(story_phase):
-                # Get character action for this phase
-                char_action = char_info['actions'][story_phase]
+            # Check if character has actions for this phase OR emotion for this specific page
+            has_action_for_phase = char_info.get('actions', {}).get(story_phase) is not None
+            has_emotion_for_page = str(page_number) in char_info.get('emotional_states', {})
+            
+            if has_action_for_phase or has_emotion_for_page:
+                # Get character action for this phase (if exists)
+                char_action = char_info.get('actions', {}).get(story_phase) # Might be None if only emotion is present
                 
                 # Get character emotion for this page if available
-                char_emotion = None
-                if 'emotional_states' in char_info and str(page_number) in char_info['emotional_states']:
-                    char_emotion = char_info['emotional_states'][str(page_number)]
+                char_emotion = char_info.get('emotional_states', {}).get(str(page_number)) # Use .get() for safety
                 
+                # Log why the character is included (for debugging)
+                include_reason = []
+                if has_action_for_phase:
+                    include_reason.append(f"action for phase '{story_phase}'")
+                if has_emotion_for_page:
+                    include_reason.append(f"emotion for page {page_number}")
+                logger.debug(f"Including character '{char_info['name']}' for page {page_number} due to: {', '.join(include_reason)}")
+
                 # Extract appearance details
                 appearance = {}
                 for attr in ['appearance', 'outfit', 'features']:
@@ -725,9 +734,14 @@ ONLY provide the exact text for the page - no additional commentary or descripti
                         char_details.append(f"     - {rule_type.capitalize()}: {rule_value}")
             else:
                  # Fallback to standard appearance attributes if rules not fetched
+                 # Emphasize these as MANDATORY consistency rules
+                 appearance_rules_added = False
                  for attr in ['appearance', 'outfit', 'features']:
                      if value := char.get(attr):
-                         char_details.append(f"   | {attr.capitalize()}: {value}")
+                         if not appearance_rules_added:
+                              char_details.append("   | MANDATORY APPEARANCE RULES:")
+                              appearance_rules_added = True
+                         char_details.append(f"     - {attr.capitalize()} (ALWAYS): {value}") # Add emphasis
             # --- End Appearance Rules --- #
 
             # Add action and emotion

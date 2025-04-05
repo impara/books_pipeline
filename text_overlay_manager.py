@@ -36,8 +36,8 @@ class TextOverlayManager:
             "stroke_width": 3, # Match story text stroke width
             "stroke_fill": (255, 255, 255), # White stroke for contrast, matching story text
             "text_area_height_factor": 0.4, # Less relevant without background
-            "background_color": None, # REMOVED background panel
-            "padding": 10 # Less relevant without background
+            "background_color": (255, 255, 255, 100), # ADDED semi-transparent white underlay
+            "padding": 10 # Existing padding, adjust if needed for "thinness"
         }
 
         self._ensure_fonts_available()
