@@ -16,9 +16,17 @@ def process_and_save_images(
     text: str,
     output_dir: Path,
     processed_dir: Path,
-    image_settings: Dict,
+    # Required manager instances first
     text_overlay_manager: TextOverlayManager,
-    checkpoint_manager: CheckpointManager
+    checkpoint_manager: CheckpointManager,
+    # Optional settings parameters with defaults last
+    target_width: int = 1024,
+    target_height: int = 1024,
+    image_format: str = 'RGB',
+    resize_method_name: str = 'LANCZOS',
+    maintain_aspect: bool = True,
+    smart_crop: bool = False,
+    bg_color: str = 'white'
 ) -> Tuple[int, Optional[str]]:
     """
     Processes and saves images from a list of base64 encoded strings.
@@ -33,7 +41,13 @@ def process_and_save_images(
         text: The story text to overlay on the image.
         output_dir: The main output directory Path object.
         processed_dir: The directory Path for the final processed book images.
-        image_settings: Dictionary containing image processing settings (width, height, etc.).
+        target_width: Target image width.
+        target_height: Target image height.
+        image_format: Target image format (e.g., 'RGB').
+        resize_method_name: Name of the PIL resize method (e.g., 'LANCZOS').
+        maintain_aspect: Whether to maintain aspect ratio (letterboxing).
+        smart_crop: Whether to crop to fill dimensions if maintain_aspect is True.
+        bg_color: Background color for letterboxing.
         text_overlay_manager: Instance of TextOverlayManager.
         checkpoint_manager: Instance of CheckpointManager.
 
@@ -51,21 +65,23 @@ def process_and_save_images(
     page_dir = output_dir / f"page_{page_number:02d}"
     page_dir.mkdir(exist_ok=True)
 
-    # Get image settings from the passed dictionary
-    target_width = image_settings.get('width', 1024)
-    target_height = image_settings.get('height', 1024)
-    image_format = image_settings.get('format', 'RGB')
+    # Get image settings from function parameters directly
+    # target_width = image_settings.get('width', 1024)
+    # target_height = image_settings.get('height', 1024)
+    # image_format = image_settings.get('format', 'RGB')
     try:
         # Uppercase the method name for getattr
-        resize_method_str = image_settings.get('resize_method', 'LANCZOS').upper()
-        resize_method = getattr(Image.Resampling, resize_method_str)
+        # resize_method_str = image_settings.get('resize_method', 'LANCZOS').upper()
+        # Use the parameter directly
+        resize_method = getattr(Image.Resampling, resize_method_name.upper())
     except AttributeError:
-        logger.warning(f"Invalid resize_method '{resize_method_str}' in config. Falling back to LANCZOS.")
+        logger.warning(f"Invalid resize_method '{resize_method_name}'. Falling back to LANCZOS.")
         resize_method = Image.Resampling.LANCZOS # Fallback to LANCZOS
 
-    maintain_aspect = image_settings.get('maintain_aspect_ratio', True)
-    smart_crop = image_settings.get('smart_crop', False)
-    bg_color = image_settings.get('background_color', 'white')
+    # Use parameters directly
+    # maintain_aspect = image_settings.get('maintain_aspect_ratio', True)
+    # smart_crop = image_settings.get('smart_crop', False)
+    # bg_color = image_settings.get('background_color', 'white')
 
     for idx, image_data_base64 in enumerate(image_data_list, 1):
         if not image_data_base64 or len(image_data_base64) < 100: # Basic check

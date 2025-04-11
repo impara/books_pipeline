@@ -6,10 +6,11 @@ from PIL import Image, ImageDraw, ImageFont
 from loguru import logger
 
 class TextOverlayManager:
-    def __init__(self, fonts_dir: Path, config: dict):
-        """Initialize the text overlay manager with fonts directory and config."""
+    def __init__(self, fonts_dir: Path, image_settings: dict, cover_settings: dict):
+        """Initialize the text overlay manager with fonts directory and specific settings."""
         self.fonts_dir = fonts_dir
-        self.config = config
+        self.image_settings = image_settings # Store specific settings
+        self.cover_settings = cover_settings   # Store specific settings
         self.fonts_dir.mkdir(parents=True, exist_ok=True)
         self.text_styles = self._initialize_text_styles()
 
@@ -99,12 +100,12 @@ class TextOverlayManager:
             image = Image.open(image_path)
             image = image.convert("RGBA")
             
-            # Get image settings from config
-            image_settings = self.config.get('image_settings', {})
-            target_width = image_settings.get('width', 1024)
-            target_height = image_settings.get('height', 1024)
-            image_format = image_settings.get('format', 'RGB')
-            resize_method = getattr(Image.Resampling, image_settings.get('resize_method', 'LANCZOS').upper())
+            # Get image settings from stored attribute
+            target_width = self.image_settings.get('width', 1024)
+            target_height = self.image_settings.get('height', 1024)
+            image_format = self.image_settings.get('format', 'RGB')
+            resize_method_name = self.image_settings.get('resize_method', 'LANCZOS').upper()
+            resize_method = getattr(Image.Resampling, resize_method_name, Image.Resampling.LANCZOS)
             
             # Ensure image dimensions match target dimensions
             if image.size != (target_width, target_height):
@@ -118,9 +119,8 @@ class TextOverlayManager:
                 style_name = "cover"
                 logger.info(f"Applying cover-specific text style for image: {os.path.basename(image_path)}")
                 style = self.text_styles.get(style_name, self.text_styles["cover"])
-                # --- Get cover text color from config --- #
-                cover_config = self.config.get('cover', {})
-                text_color_override = cover_config.get('cover_text_color', style.get('color', 'white')) # Default to white if not in config or style
+                # --- Get cover text color from stored cover settings --- #
+                text_color_override = self.cover_settings.get('cover_text_color', style.get('color', '#FFFFFF')) # Default to white hex if not in config or style
                 style['color'] = text_color_override
                 # --- End color override --- #
             elif is_final:

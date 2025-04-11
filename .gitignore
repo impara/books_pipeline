@@ -50,3 +50,4 @@ processed_book/
 *.pdf
 *.epub
 *.html 
+config_template.yaml

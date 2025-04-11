@@ -4,16 +4,24 @@ import re
 from collections import defaultdict
 
 class TransitionManager:
-    def __init__(self, config: dict):
-        """Initialize the transition manager with configuration."""
-        self.config = config
-        self.settings = config.get('settings', {})
-        self.scene_progression = self.settings.get('scene_progression', {})
+    def __init__(self, 
+                 settings: dict,
+                 environment_types: dict,
+                 transition_rules: dict,
+                 environment_transitions: dict,
+                 page_emotions: dict,
+                 story_progression: dict):
+        """Initialize the transition manager with specific configuration sections."""
+        # Store specific config sections
+        self.settings = settings
+        self.environment_types = environment_types
+        self.transition_rules = transition_rules
+        self.environment_transitions = environment_transitions
+        self.page_emotions = page_emotions
+        self.story_progression = story_progression
         
-        # Load environment types from config
-        self.environment_types = config.get('environment_types', {})
-        self.transition_rules = config.get('transition_rules', {})
-        self.environment_transitions = config.get('environment_transitions', {})
+        # Derive scene_progression from settings
+        self.scene_progression = self.settings.get('scene_progression', {})
         
         # Initialize environment cache
         self.environment_cache = {}
@@ -109,10 +117,9 @@ class TransitionManager:
         
     def _get_emotional_transition(self, current_page: int, previous_page: int) -> dict:
         """Get emotional transition guidance between pages."""
-        page_emotions = self.config.get('page_emotions', {})
-        
-        current_emotions = page_emotions.get(str(current_page), {})
-        previous_emotions = page_emotions.get(str(previous_page), {})
+        # Use the specific page_emotions attribute
+        current_emotions = self.page_emotions.get(str(current_page), {})
+        previous_emotions = self.page_emotions.get(str(previous_page), {})
         
         return {
             'from_emotion': previous_emotions.get('emotion', ''),
@@ -219,8 +226,10 @@ class TransitionManager:
     def _get_scene_info(self, page_number: int) -> Optional[dict]:
         """Get scene information for a specific page."""
         # Find the phase for this page
-        for phase, info in self.config.get('story_progression', {}).get('phase_mapping', {}).items():
+        # Use the specific story_progression attribute
+        for phase, info in self.story_progression.get('phase_mapping', {}).items():
             if info.get('start_page') <= page_number <= info.get('end_page'):
+                # Use the derived scene_progression attribute
                 return self.scene_progression.get(phase, {})
         return None
         
