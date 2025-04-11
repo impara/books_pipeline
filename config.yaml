@@ -383,6 +383,71 @@ story:
     lingering_goodbye: "Emphasize a final, poignant look back at the fading magic."
     conclusion: "Conclude with Lila inspired and fulfilled, carrying the magic in her heart."
 
+# --- Page Emotions --- #
+# Defines the overall emotional tone and lighting for specific pages,
+# used by TransitionManager for smoother visual changes.
+page_emotions:
+  "1":
+    emotion: "curiosity and calm"
+    lighting: "soft twilight with warm hues"
+    transition_from_previous: ""
+  "2":
+    emotion: "excitement and wonder"
+    lighting: "a gentle, ethereal glow"
+    transition_from_previous: "The familiar backyard giving way to the allure of mystery"
+  "3":
+    emotion: "surprise and attentive curiosity"
+    lighting: "subtle moonlight filtering through the canopy"
+    transition_from_previous: "the glowing path leads to a secret encounter"
+  "4":
+    emotion: "calm and respectful"
+    lighting: "focused moonlight on the pair"
+    transition_from_previous: "from surprise to warm guidance"
+  "5":
+    emotion: "determination mixed with excitement"
+    lighting: "a clear, magical beam illuminating the path"
+    transition_from_previous: "the gentle guidance sparks a bold journey"
+  "6":
+    emotion: "awe and cautious optimism"
+    lighting: "bright moonlight reflecting off the water"
+    transition_from_previous: "the path reveals a surprising magical obstacle"
+  "7":
+    emotion: "focused and brave"
+    lighting: "dappled moonlight with soft glows from hidden flora"
+    transition_from_previous: "the magical bridge leads into a realm of deeper wonder"
+  "8":
+    emotion: "compassion and urgency"
+    lighting: "a focused beam highlighting the trapped rabbit"
+    transition_from_previous: "the deep forest reveals a moment of rescue"
+  "9":
+    emotion: "joy and relief"
+    lighting: "a burst of moonlight reflecting off the stardust"
+    transition_from_previous: "rescue turning into a moment of celebration"
+  "10":
+    emotion: "melancholic yet grateful"
+    lighting: "dim moonlight with warm undertones"
+    transition_from_previous: "the celebration softens into farewell"
+  "11":
+    emotion: "thoughtfulness and satisfaction"
+    lighting: "a soft, contemplative glow"
+    transition_from_previous: "farewell gives way to quiet introspection"
+  "12":
+    emotion: "anticipation and calm"
+    lighting: "subtle hints of early dawn merging with moonlight"
+    transition_from_previous: "the reflective moment transitions toward homecoming"
+  "13":
+    emotion: "content and inspired"
+    lighting: "gentle morning light mixing with the last traces of moonlight"
+    transition_from_previous: "the transition home becomes a comforting reunion"
+  "14":
+    emotion: "soft farewell and lingering wonder"
+    lighting: "dim yet warm as night yields to day"
+    transition_from_previous: "homecoming softly gives way to a final goodbye"
+  "15":
+    emotion: "inspired and fulfilled"
+    lighting: "warm daylight with soft shadows"
+    transition_from_previous: "the lingering goodbye evolves into a hopeful new beginning"
+
 # --- Environment Definitions (Advanced) --- #
 environment_types:
   forest:

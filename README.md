@@ -132,8 +132,10 @@ Edit `config.yaml` to customize:
 
 - `src/`: Contains all the core Python modules.
   - `__init__.py`: Marks the directory as a Python package.
-  - `generate_book.py`: Main script for book generation.
-  - `text_overlay_manager.py`: Handles text overlay application.
+  - `generate_book.py`: Main script orchestrating the book generation pipeline.
+  - `prompt_manager.py`: Manages the construction of prompts for AI text and image generation.
+  - `image_processor.py`: Handles image decoding, resizing, saving, and text overlay preparation.
+  - `text_overlay_manager.py`: Handles applying text overlays onto images.
   - `scene_manager.py`: Manages scene consistency and character rules.
   - `transition_manager.py`: Ensures smooth story transitions between pages.
   - `book_formatter.py`: Generates different book formats (PDF, EPUB, HTML).

@@ -290,6 +290,133 @@ cover:
   cover_text_color: "#000000" # Color for text overlay (hex code).
 ```
 
+# --- Advanced Configuration Sections (Transition & Scene Management) ---
+
+These sections provide fine-grained control over how the system manages scene changes and visual consistency, primarily interacting with the `TransitionManager` and `SceneManager`.
+
+### 12. `page_emotions` - Page-Level Mood & Lighting (Used by TransitionManager)
+
+Defines the overall emotional tone and lighting for specific pages. This allows for more nuanced transitions between pages, especially when the mood or lighting shifts significantly even within the same environment.
+
+```yaml
+page_emotions:
+  "1":
+    emotion: "curiosity and calm" # The dominant emotion for the page scene.
+    lighting: "soft twilight with warm hues" # Specific lighting description for the page.
+    transition_from_previous: "" # Optional: Description of the transition *leading into* this page.
+  "2":
+    emotion: "excitement and wonder"
+    lighting: "a gentle, ethereal glow"
+    transition_from_previous: "The familiar backyard giving way to the allure of mystery"
+  # ... other pages ...
+```
+
+**Key Points:**
+
+- Keys MUST be page numbers as strings (e.g., `"1"`, `"2"`).
+- Works in conjunction with character `emotional_states` but defines the overall page feel.
+- Used by `TransitionManager` to generate `emotional_guidance` and `lighting_guidance` for image prompts.
+
+### 13. `environment_types` - Defining Scene Categories (Used by TransitionManager)
+
+Categorizes different types of environments based on keywords found in scene descriptions and elements. This allows the `TransitionManager` to detect when the setting changes significantly.
+
+```yaml
+environment_types:
+  forest:
+    indicators: [trees, leaves, path, woods, ancient] # Strong keywords indicating this type.
+    characteristics: [natural, organic, outdoor] # Broader attributes.
+    lighting_defaults: [moonlight, soft shadows, natural glow] # Default lighting if not specified elsewhere.
+  enchanted_forest:
+    indicators: [glowing, mystical, magical, ethereal]
+    characteristics: [supernatural, luminescent, mysterious]
+    lighting_defaults: [ethereal light, bioluminescence, shimmering glow]
+  home:
+    indicators: [house, garden, backyard, home]
+    characteristics: [domestic, safe, familiar]
+    lighting_defaults: [warm morning light, gentle indoor light, golden hues]
+```
+
+**Key Points:**
+
+- Keys (`forest`, `home`, etc.) are descriptive names for environment types.
+- `indicators` and `characteristics` help the system identify the environment type for a given page based on its `scene_progression` details.
+- `lighting_defaults` provide fallback lighting descriptions.
+
+### 14. `transition_rules` - Guiding Changes Between Environments (Used by TransitionManager)
+
+Provides specific instructions for the AI on how to visually transition between two different environment types (as defined in `environment_types`).
+
+```yaml
+transition_rules:
+  # Rule for transitioning FROM forest TO enchanted forest
+  forest_to_enchanted:
+    composition: "60% enchanted, 40% natural forest" # Suggested blend ratio for the new image.
+    emphasis: "magical elements" # What to focus on in the new scene.
+    maintain: [forest structure, trees, natural paths] # Elements from the PREVIOUS scene to keep.
+    introduce: [glowing effects, ethereal ambiance, mystical lighting] # NEW elements for the current scene.
+    phase_out: [mundane forest details] # Elements from the PREVIOUS scene to remove/reduce.
+  # Rule for transitioning FROM enchanted forest TO home
+  enchanted_to_home:
+    composition: "70% home, 30% enchanted forest remnants"
+    emphasis: "domestic comfort"
+    maintain: [character designs, art style, color harmony] # Usually maintain character/style.
+    introduce: [familiar home elements, garden details]
+    phase_out: [magical overlays, dense forest elements]
+```
+
+**Key Points:**
+
+- Keys follow the format `fromType_to_toType` (e.g., `forest_to_enchanted`).
+- `maintain`, `introduce`, and `phase_out` give concrete instructions to the AI for blending scenes.
+- This section is crucial for managing visual continuity during major setting changes.
+
+### 15. `environment_transitions` - General Transition Parameters (Used by TransitionManager)
+
+Provides default parameters for transitions if specific `transition_rules` are not defined. (Note: The current implementation in `TransitionManager` might primarily rely on `transition_rules`).
+
+```yaml
+environment_transitions:
+  default: { steps: 3, blend_ratio: "60-40", maintain_core_elements: true } # Fallback settings.
+  specific:
+    # These might offer finer control but check TransitionManager implementation
+    forest_to_enchanted: { steps: 2, blend_ratio: "70-30", emphasis: "magical" }
+    enchanted_to_home: { steps: 4, blend_ratio: "80-20", emphasis: "normal" }
+```
+
+**Key Points:**
+
+- The `default` section provides baseline transition behavior.
+- The `specific` section _could_ offer more granular control per-transition-type, but its current usage might be limited depending on the `TransitionManager`'s logic. Focus on `transition_rules` first.
+
+### 16. `scene_management` - Scene Consistency Controls (Used by SceneManager)
+
+(Note: This section might be more related to `SceneManager` but is included here as advanced configuration)
+Contains parameters related to how the `SceneManager` handles character introductions and scene consistency, potentially overlapping with `TransitionManager`'s reference handling.
+
+```yaml
+scene_management:
+  # Map specific characters to pages/types for introduction tracking.
+  special_character_introductions:
+    supporting_character: { page: 3, character_type: "owl" }
+    moon_rabbit: { page: 8, character_type: "rabbit" }
+  # Parameters for reference image selection/usage (may interact with TransitionManager).
+  reference_page:
+    similarity_threshold: 0.7
+  # Fallback phase definitions if page not in main mapping.
+  story_phase_fallback:
+    introduction:
+      end_page: 3
+    # ... other phases ...
+  # Default phase if no match found.
+  default_phase: "conclusion"
+```
+
+**Key Points:**
+
+- Helps `SceneManager` track when characters should first appear.
+- `reference_page` settings might influence how reference images are chosen or weighted, potentially working alongside `TransitionManager`'s handling.
+
 ## General Tips for Configuration
 
 - **Start Simple:** Begin with the core `book`, `characters`, `story`, and `settings.scene_progression` sections.
