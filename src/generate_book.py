@@ -9,7 +9,7 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
 import argparse
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from .text_overlay_manager import TextOverlayManager
 from .scene_manager import SceneManager
@@ -23,24 +23,40 @@ from .prompt_manager import PromptManager
 # Load environment variables
 load_dotenv()
 
+# Helper function to load config (moved from BookGenerator)
+def load_config(config_path: str) -> dict:
+    """Load configuration from YAML file."""
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
 class BookGenerator:
-    def __init__(self, config_path: str):
-        """Initialize the book generator with configuration."""
-        self.config = self._load_config(config_path)
+    def __init__(self, 
+                 config_path: str, 
+                 api_client: APIClient,
+                 checkpoint_manager: CheckpointManager,
+                 text_overlay_manager: TextOverlayManager,
+                 scene_manager: SceneManager,
+                 transition_manager: TransitionManager,
+                 prompt_manager: PromptManager):
+        """Initialize the book generator with configuration and injected managers."""
+        self.config = load_config(config_path) # Still load config internally for now
         
-        # Initialize API client
-        self.api_client = APIClient(self.config)
+        # Assign injected managers
+        self.api_client = api_client
+        self.checkpoint_manager = checkpoint_manager
+        self.text_overlay_manager = text_overlay_manager
+        self.scene_manager = scene_manager
+        self.transition_manager = transition_manager
+        self.prompt_manager = prompt_manager
         
         # Set target image dimensions
         image_settings = self.config.get('image_settings', {})
         self.image_width = image_settings.get('width', 1024)
         self.image_height = image_settings.get('height', 1024)
         
-        # Initialize checkpoint manager
-        self.checkpoint_manager = CheckpointManager()
-        
         # Try to load checkpoint if it exists
-        checkpoint_data = self.checkpoint_manager._load_checkpoint()
+        # CheckpointManager is already injected and initialized
+        checkpoint_data = self.checkpoint_manager._load_checkpoint() 
         
         if checkpoint_data:
             logger.info(f"Resuming from checkpoint: {checkpoint_data['output_dir']}")
@@ -51,6 +67,8 @@ class BookGenerator:
             self.conversation_history = checkpoint_data.get('conversation_history', [])
             self.pages_with_images = checkpoint_data.get('pages_with_images', set())
             self.original_image_files = checkpoint_data.get('original_image_files', {})
+            # Pass loaded previous descriptions to the injected scene manager
+            self.scene_manager.set_previous_descriptions(self.previous_descriptions) 
         else:
             # Start fresh
             self.output_dir = self._create_output_directory()
@@ -73,22 +91,17 @@ class BookGenerator:
         self.processed_dir = self.output_dir / "processed_book"
         self.processed_dir.mkdir(exist_ok=True)
         
-        # Initialize managers
-        self.text_overlay_manager = TextOverlayManager(Path("assets/fonts"), self.config)
-        self.scene_manager = SceneManager(self.config)
-        self.scene_manager.set_previous_descriptions(self.previous_descriptions)
-        self.transition_manager = TransitionManager(self.config)
-        self.prompt_manager = PromptManager(self.config, self.scene_manager)
+        # Managers are now injected, remove their internal initialization:
+        # self.text_overlay_manager = TextOverlayManager(Path("assets/fonts"), self.config)
+        # self.scene_manager = SceneManager(self.config)
+        # self.scene_manager.set_previous_descriptions(self.previous_descriptions) # Moved earlier
+        # self.transition_manager = TransitionManager(self.config)
+        # self.prompt_manager = PromptManager(self.config, self.scene_manager)
         
-        # Font configuration
+        # Font configuration (relies on injected text_overlay_manager)
         self.fonts_dir = Path("assets/fonts")
         self.fonts_dir.mkdir(parents=True, exist_ok=True)
         self.text_styles = self.text_overlay_manager._initialize_text_styles()
-
-    def _load_config(self, config_path: str) -> dict:
-        """Load configuration from YAML file."""
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
 
     def _create_output_directory(self) -> Path:
         """Create a unique output directory for the book."""
@@ -98,45 +111,6 @@ class BookGenerator:
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
         
-    def _find_most_recent_image_page(self, page_number: int) -> Optional[int]:
-        """Find the most suitable reference image page for consistency."""
-        # (This logic remains here as it depends on self.original_image_files)
-        available_pages = sorted([p for p in self.original_image_files.keys() if p < page_number], reverse=True)
-        
-        if not available_pages:
-            logger.info(f"No reference pages found for page {page_number}")
-            return None
-
-        try:
-            # Passing None for content_text as we only need scene reqs for characters here
-            scene_reqs = self.scene_manager.get_scene_requirements(page_number, None) 
-            current_chars = scene_reqs.get('characters', [])
-            intro_pages_with_images = []
-            
-            if current_chars:
-                for char_name in current_chars:
-                    char_type = next((ct for ct, cd in self.config['characters'].items() if cd['name'] == char_name), None)
-                    if char_type:
-                        intro_page = self.config['characters'][char_type].get('introduction', {}).get('page')
-                        if intro_page and intro_page != page_number and intro_page in self.original_image_files:
-                            intro_pages_with_images.append(intro_page)
-
-            if intro_pages_with_images:
-                earliest_intro_page = min(intro_pages_with_images)
-                logger.info(f"Using earliest character introduction page {earliest_intro_page} as reference for page {page_number}")
-                return earliest_intro_page
-                
-        except Exception as e:
-             logger.warning(f"Could not determine character introduction page for reference due to error: {e}. Falling back.")
-
-        if available_pages:
-            most_recent_page = available_pages[0]
-            logger.info(f"Using most recent page {most_recent_page} as reference for page {page_number}")
-            return most_recent_page
-            
-        logger.info(f"Could not find any suitable reference page for page {page_number}")
-        return None
-
     def generate_page_text(self, page_number: int):
         """Generate text for a single page of the book."""
         try:
@@ -156,106 +130,63 @@ class BookGenerator:
             # Generate text using PromptManager
             prompt = self.prompt_manager.generate_text_prompt(page_number, self.previous_descriptions)
             
-            text_content, success = self.api_client.generate_story_text(prompt, self.conversation_history)
+            # Calculate dynamic temperature
+            temperature = self._calculate_temperature(page_number)
             
-            if success:
-                # Update conversation history
-                self.conversation_history.extend([prompt, text_content] if text_content else [prompt])
-                self.checkpoint_manager.add_to_conversation_history(text_content or "")
+            # Call APIClient to get the *extracted* story text
+            # Pass page_number and temperature for better extraction and control
+            extracted_story_text, success = self.api_client.generate_story_text(
+                prompt, 
+                self.conversation_history, 
+                page_number=page_number,
+                temperature=temperature
+            )
+            
+            if success and extracted_story_text: # Check if text was successfully extracted
+                # Update conversation history (using the extracted text)
+                # Note: Might want to store the *full* response in a debug log if needed
+                self.conversation_history.extend([prompt, extracted_story_text])
+                self.checkpoint_manager.add_to_conversation_history(extracted_story_text) # Store extracted text
                 if len(self.conversation_history) > 10:
                     self.conversation_history = self.conversation_history[-10:]
                 
-                # Save files
+                story_text = extracted_story_text # Assign the directly returned text
+                
+                # Save the raw response and the extracted text separately
                 page_dir = self.output_dir / f"page_{page_number:02d}"
                 page_dir.mkdir(exist_ok=True)
-                with open(page_dir / "text.txt", 'w') as f: f.write(text_content)
-                
-                story_text = self._extract_story_text(text_content, page_number)
-                
-                # Generate backup if needed
-                if not story_text or len(story_text.split()) < 5:
-                    logger.warning(f"Story text extraction may be incomplete for page {page_number}. Using backup.")
-                    backup_story = self._generate_backup_story_text(page_number, text_content) 
-                    story_text = backup_story if backup_story else story_text # Use backup if successful
-                
+                # Optional: Save the raw response for debugging
+                # with open(page_dir / "text_raw_response.txt", 'w') as f: f.write(raw_response_text_if_needed) 
                 with open(page_dir / "story_text.txt", 'w') as f: f.write(story_text)
                 
-                # Store description and update checkpoint
+                # The backup generation logic might still be useful if the *extracted* text is too short
+                if len(story_text.split()) < 5:
+                    logger.warning(f"Extracted story text is very short for page {page_number}. Generating backup.")
+                    # The backup generation now needs the original prompt or context, not the raw response
+                    # We'll need to adjust _generate_backup_story_text or its prompt creation
+                    backup_story = self._generate_backup_story_text(page_number, story_text) # Pass the extracted text as context maybe?
+                    if backup_story:
+                        story_text = backup_story # Use backup if successful
+                        # Overwrite story_text.txt with backup
+                        with open(page_dir / "story_text.txt", 'w') as f: f.write(story_text) 
+                
+                # Store final description and update checkpoint
                 self.previous_descriptions[page_number] = story_text
                 self.checkpoint_manager.add_page_description(page_number, story_text)
                 
                 logger.info(f"Generated and saved text for page {page_number}")
                 return story_text
+            elif success and not extracted_story_text:
+                # Handle case where API call succeeded but extraction failed within APIClient
+                 logger.error(f"API call succeeded but failed to extract story text for page {page_number}. Check APIClient logs.")
+                 raise Exception(f"Text extraction failed for page {page_number}")
             else:
-                raise Exception("No valid response from API for text generation")
+                # Handle API call failure
+                raise Exception(f"API call failed for text generation for page {page_number}")
             
         except Exception as e:
             logger.error(f"Error generating text for page {page_number}: {str(e)}")
             raise
-
-    def _extract_story_text(self, full_text, page_number):
-        """Extract just the story text from the full response."""
-        # (Keep this method here as it's specific to parsing API response)
-        if "TEXT START" in full_text and "TEXT END" in full_text:
-            start_idx = full_text.find("TEXT START") + len("TEXT START")
-            end_idx = full_text.find("TEXT END")
-            if start_idx < end_idx:
-                extracted_text = full_text[start_idx:end_idx].strip()
-                if extracted_text: return extracted_text
-        
-        lines = full_text.split('\n')
-        story_lines = []
-        in_story_section = False
-        for line in lines:
-            line_lower = line.strip().lower()
-            if not line_lower: continue
-            if "text:" in line_lower:
-                in_story_section = True
-                continue
-            if "illustration" in line_lower: break # Stop if we hit illustration part
-            if in_story_section: story_lines.append(line.strip())
-        
-        if not story_lines: # Try quotes
-             story_lines = [l.strip().strip('"') for l in lines if l.strip().count('"') >= 2]
-
-        if not story_lines: # Try lines after page header
-            page_marker_found = False
-            for i, line in enumerate(lines):
-                if f"page {page_number}" in line.lower():
-                    page_marker_found = True
-                    candidate_lines = [l for l in lines[i+1:i+6] if l.strip() and not l.startswith(('#', '**', '-')) and ':' not in l]
-                    story_lines.extend(candidate_lines[:3]) # Take first 3 plausible lines
-                    break
-        
-        if not story_lines: # Fallback: first 3 non-empty, non-heading lines
-            story_lines = [l.strip() for l in lines if l.strip() and not l.startswith(('#', '**', '-'))][:3]
-            
-        return "\n".join(story_lines) if story_lines else full_text # Return full text if desperate
-    
-    def _generate_backup_story_text(self, page_number: int, original_text: str) -> Optional[str]:
-        """Generate a backup story text when extraction fails."""
-        # (Keep this method here as it involves API call)
-        try:
-            prev_context = f"Previous page: {self.previous_descriptions[page_number-1]}\n\n" if page_number > 1 and (page_number-1) in self.previous_descriptions else ""
-            orig_context = f"Original partial text: {original_text[:200]}...\n\n" if len(original_text) > 20 else ""
-            book_title = self.config['book']['title']
-            
-            prompt = f"""Based on the context, write 2-3 sentences ONLY for page {page_number} of "{book_title}".
-{prev_context}{orig_context}
-The text should be engaging, consistent, and suitable for illustration. ONLY provide the exact text for the page.
-"""
-            backup_text, success = self.api_client.generate_backup_story(prompt)
-            
-            if success:
-                logger.info(f"Generated backup story text for page {page_number}")
-                return backup_text
-            else:
-                logger.error("Failed to generate backup story text")
-                return None
-            
-        except Exception as e:
-            logger.error(f"Error generating backup story: {str(e)}")
-            return None
 
     def _calculate_temperature(self, page_number: int) -> float:
         """Calculate generation temperature based on position within story phase."""
@@ -289,48 +220,50 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
             transition_requirements = {}
             if page_number > 1:
                 previous_page = page_number - 1
-                transition_requirements = self.transition_manager.analyze_transition(page_number, previous_page)
-                if transition_requirements:
-                    logger.info(f"Generated transition requirements for page {page_number}")
+                # Call TransitionManager directly (already done by PromptManager implicitly? Check PM.)
+                # transition_requirements = self.transition_manager.analyze_transition(page_number, previous_page)
+                # if transition_requirements: logger.info(f"Generated transition requirements for page {page_number}")
 
-            # Generate the image prompt using PromptManager
-            final_prompt_text = self.prompt_manager.generate_image_prompt(
-                page_number,
-                prompt_text,
-                scene_requirements,
-                required_characters,
-                transition_requirements
-            )
-
-            # --- Determine and load reference image --- #
+            # --- Determine reference page using SceneManager --- #
+            reference_page_num = self.scene_manager.find_reference_page(page_number, self.original_image_files)
             reference_image_b64 = None
-            reference_page_num = self._find_most_recent_image_page(page_number)
             if reference_page_num:
                 ref_image_path = self.original_image_files.get(reference_page_num)
                 if ref_image_path and os.path.exists(ref_image_path):
                     try:
                         with open(ref_image_path, 'rb') as f: image_data = f.read()
                         reference_image_b64 = base64.b64encode(image_data).decode('utf-8')
-                        logger.info(f"Loaded reference image from page {reference_page_num} for page {page_number}")
-                        # Get reference handling guidance (can be added to API call or prompt)
-                        # reference_handling = self.transition_manager.get_reference_handling(page_number, reference_page_num)
-                        # TODO: Decide where/how to use reference_handling (API param or prompt text)
+                        logger.info(f"Found reference image from page {reference_page_num} for page {page_number}")
+                        # Note: Reference handling guidance is now handled within APIClient or PromptManager
                     except Exception as e:
                         logger.warning(f"Failed to load reference image from {ref_image_path}: {e}")
                 else:
-                    logger.warning(f"Reference image path for page {reference_page_num} not found or missing.")
-            # --- End reference image loading --- #
+                    logger.warning(f"Reference image path for page {reference_page_num} not found or missing in original_image_files.")
+            # --- End reference finding --- #
+            
+            # Generate the image prompt using PromptManager
+            # PromptManager will need the reference page number to generate appropriate guidance
+            final_prompt_text = self.prompt_manager.generate_image_prompt(
+                page_number=page_number,
+                story_text=prompt_text,
+                scene_requirements=scene_requirements,
+                required_characters=required_characters,
+                reference_page_num=reference_page_num, # Pass the determined ref page
+                original_image_files=self.original_image_files # Pass the dictionary of saved files
+            )
             
             # Generate the image using the API client
+            # Pass reference_image_b64 directly
             response = self.api_client.generate_image(
                 prompt_text=final_prompt_text, 
-                reference_image_b64=reference_image_b64,
+                reference_image_b64=reference_image_b64, # Pass the loaded image data
                 page_number=page_number,
-                scene_requirements=scene_requirements # Pass scene_reqs for potential API use
+                scene_requirements=scene_requirements # Pass scene_reqs for potential API use (e.g., overrides)
             )
             
             # Process and save the images using the external processor
-            image_count, first_original_path = self._process_and_save_images(response, page_number, prompt_text)
+            # Pass the story_text (which was input to this function)
+            image_count, first_original_path = self._process_and_save_images(response, page_number, prompt_text) 
             
             if image_count > 0 and first_original_path:
                 logger.info(f"Successfully generated image for page {page_number}: {first_original_path}")
@@ -375,88 +308,40 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
         else: logger.warning("No explicit total character count found!")
         logger.info("END DUPLICATE CHECK")
 
-    def _get_required_characters(self, page_number: int, content_text: str) -> List[dict]:
-        """Get required characters for the current page."""
-        # (Keep this method here as it uses scene_manager and config)
-        required_characters = []
-        story_phase = self.scene_manager._get_story_phase(page_number)
-        
-        for char_type, char_info in self.config.get('characters', {}).items():
-            intro_page = char_info.get('introduction', {}).get('page', 1)
-            if page_number < intro_page: continue
-                
-            has_action = char_info.get('actions', {}).get(story_phase) is not None
-            has_emotion = str(page_number) in char_info.get('emotional_states', {})
-            
-            if has_action or has_emotion:
-                char_action = char_info.get('actions', {}).get(story_phase)
-                char_emotion = char_info.get('emotional_states', {}).get(str(page_number))
-                
-                include_reason = []
-                if has_action: include_reason.append(f"action for '{story_phase}'")
-                if has_emotion: include_reason.append(f"emotion for page {page_number}")
-                logger.debug(f"Including '{char_info['name']}' for page {page_number}: {', '.join(include_reason)}")
-
-                appearance = {attr: char_info[attr] for attr in ['appearance', 'outfit', 'features'] if attr in char_info}
-                
-                character = {
-                    'name': char_info['name'], 'type': char_type, 
-                    'description': char_info.get('description', ''),
-                    'action': char_action, 'emotion': char_emotion, **appearance
-                }
-                required_characters.append(character)
-        
-        char_names = [char['name'] for char in required_characters]
-        logger.info(f"Required characters for page {page_number}: {', '.join(char_names) if char_names else 'None'}")
-        return required_characters
-        
-    def _process_and_save_images(self, image_data_list: Optional[List[str]], page_number: int, text: str) -> int:
+    def _process_and_save_images(self, image_data_list: Optional[List[str]], page_number: int, text: str) -> Tuple[int, Optional[str]]:
         """Process and save images by calling the external image processor."""
         image_settings = self.config.get('image_settings', {})
+        # Extract individual settings to pass to the function
+        target_width = image_settings.get('width', 1024)
+        target_height = image_settings.get('height', 1024)
+        image_format = image_settings.get('format', 'RGB')
+        resize_method_name = image_settings.get('resize_method', 'LANCZOS')
+        maintain_aspect = image_settings.get('maintain_aspect_ratio', True)
+        smart_crop = image_settings.get('smart_crop', False)
+        bg_color = image_settings.get('background_color', 'white')
+        
         image_count, first_original_image_path = process_and_save_images(
-            image_data_list=image_data_list, page_number=page_number, text=text,
-            output_dir=self.output_dir, processed_dir=self.processed_dir,
-            image_settings=image_settings,
+            image_data_list=image_data_list, 
+            page_number=page_number, 
+            text=text,
+            output_dir=self.output_dir, 
+            processed_dir=self.processed_dir,
+            # Pass managers
             text_overlay_manager=self.text_overlay_manager,
-            checkpoint_manager=self.checkpoint_manager
+            checkpoint_manager=self.checkpoint_manager,
+            # Pass individual settings
+            target_width=target_width,
+            target_height=target_height,
+            image_format=image_format,
+            resize_method_name=resize_method_name,
+            maintain_aspect=maintain_aspect,
+            smart_crop=smart_crop,
+            bg_color=bg_color
         )
         if first_original_image_path:
              absolute_path = self.output_dir / first_original_image_path
              self.original_image_files[page_number] = str(absolute_path)
-        return image_count
-
-    def _add_reference_image(self, prompt_parts: list, reference_page: int, current_page: int, content_text: str):
-        """Add reference image to the prompt parts for consistency."""
-        # (Keep this method here as it accesses original_image_files and calls transition_manager)
-        try:
-            if reference_page == current_page:
-                logger.warning(f"Prevented page {current_page} from self-referencing")
-                return
-                
-            ref_image_path = self.original_image_files.get(reference_page)
-            if not ref_image_path or not os.path.exists(ref_image_path):
-                logger.warning(f"Reference image not found for page {reference_page}")
-                return
-                
-            reference_handling = self.transition_manager.get_reference_handling(current_page, reference_page)
-            
-            with open(ref_image_path, 'rb') as f: image_data = f.read()
-            image_base64 = base64.b64encode(image_data).decode('utf-8')
-            
-            guidance = ["REFERENCE IMAGE GUIDANCE:"]
-            if maintain := reference_handling.get('maintain'): guidance.extend([f"- Maintain: {item}" for item in maintain])
-            if adapt := reference_handling.get('adapt'): guidance.extend([f"- Adapt: {item}" for item in adapt])
-            if ignore := reference_handling.get('ignore'): guidance.extend([f"- Ignore: {item}" for item in ignore])
-                
-            prompt_parts.append({"text": "\n".join(guidance)})
-            prompt_parts.append({"text": "\n**CRITICAL CONSISTENCY NOTE:** Use text rules (marked 'ALWAYS') as primary source for appearance. Use reference image mainly for style, palette, placement. TEXT RULES OVERRIDE IMAGE CONFLICTS."})
-            prompt_parts.append({
-                "inlineData": {"mimeType": "image/png", "data": image_base64}
-            })
-            logger.info(f"Added reference image from page {reference_page} for consistency")
-            
-        except Exception as e:
-            logger.warning(f"Error adding reference image: {str(e)}")
+        return image_count, first_original_image_path
 
     def generate_cover(self):
         """Generate the book cover image and apply text overlay."""
@@ -538,8 +423,8 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
             # Get scene requirements
             scene_requirements = self.scene_manager.get_scene_requirements(page_number, story_text)
             
-            # Get required characters
-            required_characters = self._get_required_characters(page_number, story_text)
+            # Get required characters (now from SceneManager)
+            required_characters = self.scene_manager.get_required_characters(page_number, story_text)
             
             # Then generate the image based on the text
             image_path = self.generate_page_image(page_number, story_text, scene_requirements, required_characters)
@@ -604,8 +489,16 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
     def _create_final_book(self):
         """Create a final book file with consistent layout."""
         try:
-            # Initialize book formatter
-            formatter = BookFormatter(self.output_dir, self.config)
+            # Initialize book formatter with specific config sections
+            formatter = BookFormatter(
+                output_dir=self.output_dir, 
+                book_config=self.config.get('book', {}),
+                characters_config=self.config.get('characters', {}),
+                print_settings=self.config.get('print_settings', {}),
+                metadata_config=self.config.get('metadata', {}),
+                cover_config=self.config.get('cover', {}),
+                output_formats_config=self.config.get('output_formats', {})
+            )
             
             # Create all supported formats
             formats = formatter.create_all_formats()
@@ -628,7 +521,8 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
         original_completed_pages = self.completed_pages.copy()
         original_pages_with_images = self.pages_with_images.copy()
         original_previous_descriptions = self.previous_descriptions.copy()
-        original_existing_characters = self.scene_manager.existing_characters.copy()
+        # Backup existing characters from scene_manager
+        # original_existing_characters = self.scene_manager.existing_characters.copy()
         original_image_files = self.original_image_files.copy()
         
         try:
@@ -642,51 +536,51 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
             for page_num in page_numbers:
                 logger.info(f"Regenerating page {page_num}")
                 
-                # Find best reference page using the scene manager method
-                best_ref_page = self._find_most_recent_image_page(page_num)
+                # --- Use SceneManager to find reference page --- #
+                best_ref_page = self.scene_manager.find_reference_page(page_num, self.original_image_files)
                 logger.info(f"Using reference page {best_ref_page} for consistency in regeneration")
                 
-                # If no reference page found and we need one, use fallback strategy
+                # Fallback strategy if needed (this might be redundant now? Check SceneManager logic)
                 if best_ref_page is None and page_num > 1:
-                    # Try to find the closest preceding page
+                    # Try to find the closest preceding page with a saved image
                     for prev_page in range(page_num-1, 0, -1):
-                        # Check if this page exists and has an image
-                        page_dir = self.output_dir / f"page_{prev_page:02d}"
-                        original_image_path = page_dir / f"image_original_1.png"
-                        if original_image_path.exists():
-                            best_ref_page = prev_page
-                            # Register this image path
-                            self.original_image_files[prev_page] = str(original_image_path)
-                            self.checkpoint_manager.add_original_image_file(prev_page, str(original_image_path))
-                            self.pages_with_images.add(prev_page)
-                            logger.info(f"Found fallback reference page {best_ref_page} for regeneration")
-                            break
+                        if prev_page in self.original_image_files:
+                           best_ref_page = prev_page
+                           logger.info(f"Found fallback reference page {best_ref_page} for regeneration (closest previous)")
+                           break
+                # --- End reference finding --- #
                 
-                # Temporarily add reference page back to pages_with_images if needed
-                if best_ref_page and best_ref_page not in self.pages_with_images:
-                    self.pages_with_images.add(best_ref_page)
-                    # Restore the original image file for reference
-                    if best_ref_page in original_image_files:
-                        self.original_image_files[best_ref_page] = original_image_files[best_ref_page]
-                        self.checkpoint_manager.add_original_image_file(best_ref_page, original_image_files[best_ref_page])
+                # Temporarily ensure reference page info exists if needed
+                if best_ref_page and best_ref_page not in self.original_image_files:
+                     # This case might indicate an issue, as find_reference_page should only return pages from original_image_files
+                     logger.warning(f"Reference page {best_ref_page} chosen but not found in original_image_files dictionary. Re-adding temporarily if it exists in backup.")
+                     if best_ref_page in original_image_files: # Check the backup copy
+                         self.original_image_files[best_ref_page] = original_image_files[best_ref_page]
+                         self.checkpoint_manager.add_original_image_file(best_ref_page, original_image_files[best_ref_page])
+                         # We might not need pages_with_images anymore if we rely on original_image_files
+                         # self.pages_with_images.add(best_ref_page)
+                     else:
+                         logger.error(f"Could not restore original image file path for reference page {best_ref_page}. Proceeding without reference.")
+                         best_ref_page = None # Cannot use this reference
                 
                 # Set a flag to indicate we're regenerating (for stronger consistency guidance)
-                self.is_regenerating = True
+                # This flag might be better handled inside PromptManager now
+                # self.is_regenerating = True 
                 
-                # Generate the page
+                # Generate the page (will use the logic updated above)
                 self.generate_page(page_num)
                 
                 # Clear the regeneration flag
-                self.is_regenerating = False
+                # self.is_regenerating = False
                 
                 # Add delay between pages to avoid rate limits
                 if page_num != page_numbers[-1]:
                     logger.info(f"Waiting 8 seconds before next page...")
                     time.sleep(8)
                     
-                # Clean up temporary reference if added
-                if best_ref_page and best_ref_page not in original_pages_with_images:
-                    self.pages_with_images.remove(best_ref_page)
+                # Clean up temporary reference if added? (Maybe not necessary if state is managed correctly)
+                # if best_ref_page and best_ref_page not in original_pages_with_images:
+                #     self.pages_with_images.remove(best_ref_page)
             
             logger.info(f"Finished regenerating pages: {page_numbers}")
             
@@ -699,7 +593,7 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
             self.completed_pages = original_completed_pages
             self.pages_with_images = original_pages_with_images
             self.previous_descriptions = original_previous_descriptions
-            self.scene_manager.existing_characters = original_existing_characters
+            # self.scene_manager.existing_characters = original_existing_characters
             self.original_image_files = original_image_files
             raise
 
@@ -720,14 +614,101 @@ The text should be engaging, consistent, and suitable for illustration. ONLY pro
         
         return " ".join(style_parts)
 
+    def _generate_backup_story_text(self, page_number: int, context_text: str) -> Optional[str]:
+        """Generate a backup story text when extraction fails or text is too short."""
+        try:
+            # Create backup prompt using PromptManager
+            prompt = self.prompt_manager.generate_backup_text_prompt(
+                page_number=page_number,
+                context_text=context_text,
+                previous_descriptions=self.previous_descriptions
+            )
+             
+            # Calculate temperature (might use a different one for backup?)
+            backup_temp = self._calculate_temperature(page_number) # Or a fixed higher/lower value?
+            
+            # Call API Client
+            backup_text, success = self.api_client.generate_backup_story(
+                prompt=prompt,
+                temperature=backup_temp,
+                page_number=page_number # Pass page number for extraction hint
+            )
+            
+            if success:
+                logger.info(f"Generated backup story text for page {page_number}")
+                return backup_text # APIClient.generate_backup_story now extracts
+            else:
+                logger.error("Failed to generate backup story text via API")
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error generating backup story for page {page_number}: {str(e)}")
+            return None
+
 def handle_rate_limit_retry(max_retries=3, initial_wait=20):
     """Try to resume book generation with exponential backoff for rate limits."""
     retry_count = 0
     wait_time = initial_wait
+    config_path = "config.yaml" # Define config path here
     
+    # Load config once outside the loop
+    try:
+        config = load_config(config_path)
+    except Exception as e:
+        logger.error(f"Failed to load configuration {config_path} for retry logic: {e}")
+        return # Cannot proceed without config
+
     while retry_count < max_retries:
         try:
-            generator = BookGenerator("config.yaml")
+            # Instantiate managers
+            api_client = APIClient(config.get('generation', {}))
+            checkpoint_manager = CheckpointManager()
+            text_overlay_manager = TextOverlayManager(Path("assets/fonts"), config.get('image_settings', {}), config.get('cover', {}))
+            # Instantiate TransitionManager first as SceneManager needs it
+            transition_manager = TransitionManager(
+                settings=config.get('settings', {}),
+                environment_types=config.get('environment_types', {}),
+                transition_rules=config.get('transition_rules', {}),
+                environment_transitions=config.get('environment_transitions', {}),
+                page_emotions=config.get('page_emotions', {}),
+                story_progression=config.get('story_progression', {})
+            )
+            # Instantiate SceneManager with specific config sections and TransitionManager
+            scene_manager = SceneManager(
+                settings=config.get('settings', {}),
+                characters=config.get('characters', {}),
+                story_progression=config.get('story_progression', {}),
+                page_emotions=config.get('page_emotions', {}),
+                environment_types=config.get('environment_types', {}),
+                scene_management=config.get('scene_management', {}),
+                story_beats=config.get('story', {}).get('story_beats', {}),
+                transition_manager=transition_manager
+            )
+            # Instantiate PromptManager with SceneManager, TransitionManager and specific config sections
+            prompt_manager = PromptManager(
+                book_config=config.get('book', {}),
+                characters_config=config.get('characters', {}),
+                generation_config=config.get('generation', {}),
+                image_settings=config.get('image_settings', {}),
+                cover_config=config.get('cover', {}),
+                metadata_config=config.get('metadata', {}),
+                scene_manager=scene_manager,
+                transition_manager=transition_manager # Pass transition_manager
+            )
+
+            # Instantiate BookGenerator with injected managers
+            generator = BookGenerator(
+                config_path=config_path, 
+                api_client=api_client,
+                checkpoint_manager=checkpoint_manager,
+                text_overlay_manager=text_overlay_manager,
+                scene_manager=scene_manager,
+                transition_manager=transition_manager,
+                prompt_manager=prompt_manager
+            )
+            # Scene manager needs previous descriptions set after generator init loads checkpoint
+            # This happens inside BookGenerator.__init__ now
+
             generator.generate_book()
             # If successful, exit the loop
             break
@@ -755,6 +736,13 @@ def main():
     if not os.path.exists(config_path):
         logger.error(f"Configuration file not found: {config_path}")
         return
+        
+    # Load config first
+    try:
+        config = load_config(config_path)
+    except Exception as e:
+        logger.error(f"Failed to load configuration {config_path}: {e}")
+        return # Cannot proceed without config
     
     parser = argparse.ArgumentParser(description='Generate a children\'s book with text and illustrations.')
     parser.add_argument('--retry', action='store_true', help='Auto-retry on rate limits')
@@ -762,7 +750,54 @@ def main():
     parser.add_argument('--apply-text', type=str, nargs='*', help='Apply text overlay to existing images. Optional arguments: [position] [page_num|cover]. Position: top, middle, bottom (default: bottom). Target: specific page number, "cover", or blank for all pages.')
     args = parser.parse_args()
     
-    generator = BookGenerator(config_path)
+    # Instantiate managers before BookGenerator
+    api_client = APIClient(config.get('generation', {}))
+    checkpoint_manager = CheckpointManager()
+    text_overlay_manager = TextOverlayManager(Path("assets/fonts"), config.get('image_settings', {}), config.get('cover', {}))
+    # Instantiate TransitionManager first as SceneManager needs it
+    transition_manager = TransitionManager(
+        settings=config.get('settings', {}),
+        environment_types=config.get('environment_types', {}),
+        transition_rules=config.get('transition_rules', {}),
+        environment_transitions=config.get('environment_transitions', {}),
+        page_emotions=config.get('page_emotions', {}),
+        story_progression=config.get('story_progression', {})
+    )
+    # Instantiate SceneManager with specific config sections and TransitionManager
+    scene_manager = SceneManager(
+        settings=config.get('settings', {}),
+        characters=config.get('characters', {}),
+        story_progression=config.get('story_progression', {}),
+        page_emotions=config.get('page_emotions', {}),
+        environment_types=config.get('environment_types', {}),
+        scene_management=config.get('scene_management', {}),
+        story_beats=config.get('story', {}).get('story_beats', {}),
+        transition_manager=transition_manager
+    )
+    # Instantiate PromptManager with SceneManager, TransitionManager and specific config sections
+    prompt_manager = PromptManager(
+        book_config=config.get('book', {}),
+        characters_config=config.get('characters', {}),
+        generation_config=config.get('generation', {}),
+        image_settings=config.get('image_settings', {}),
+        cover_config=config.get('cover', {}),
+        metadata_config=config.get('metadata', {}),
+        scene_manager=scene_manager,
+        transition_manager=transition_manager # Pass transition_manager
+    )
+
+    # Instantiate BookGenerator with injected managers
+    generator = BookGenerator(
+        config_path=config_path, 
+        api_client=api_client,
+        checkpoint_manager=checkpoint_manager,
+        text_overlay_manager=text_overlay_manager,
+        scene_manager=scene_manager,
+        transition_manager=transition_manager,
+        prompt_manager=prompt_manager
+    )
+    # Scene manager needs previous descriptions set after generator init loads checkpoint
+    # This happens inside BookGenerator.__init__ now
     
     if args.apply_text:
         # Parse text placement options

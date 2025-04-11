@@ -1,20 +1,36 @@
 from pathlib import Path
 from loguru import logger
 import yaml
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from .transition_manager import TransitionManager
 
 class SceneManager:
-    def __init__(self, config: dict):
-        """Initialize the scene manager with configuration."""
-        self.config = config
-        self.settings = config.get('settings', {})
-        self.scene_progression = self.settings.get('scene_progression', {})
-        self.page_emotions = config.get('page_emotions', {})
-        self.environment_types = config.get('environment_types', {})
+    def __init__(self, 
+                 settings: dict, 
+                 characters: dict,
+                 story_progression: dict,
+                 page_emotions: dict,
+                 environment_types: dict,
+                 scene_management: dict,
+                 story_beats: dict,
+                 transition_manager: TransitionManager):
+        """Initialize the scene manager with specific configuration sections and injected TransitionManager."""
+        # Store specific config sections
+        self.settings = settings
+        self.characters = characters
+        self.story_progression = story_progression
+        self.page_emotions = page_emotions
+        self.environment_types = environment_types
+        self.scene_management = scene_management
+        self.story_beats = story_beats
         
-        # Initialize managers
-        self.transition_manager = TransitionManager(config)
+        # Store injected manager
+        self.transition_manager = transition_manager
+        
+        # Derive values from specific settings
+        self.scene_progression = self.settings.get('scene_progression', {})
+        # self.page_emotions is already passed directly
+        # self.environment_types is already passed directly
         
         # Initialize caches
         self.scene_cache = {}
@@ -26,7 +42,7 @@ class SceneManager:
         new_characters = []
         
         # Only check for character introductions on their specific introduction pages
-        for char_type, char_info in self.config['characters'].items():
+        for char_type, char_info in self.characters.items():
             intro_info = char_info.get('introduction', {})
             char_name = char_info['name']
             intro_page = intro_info.get('page')
@@ -36,7 +52,7 @@ class SceneManager:
                 continue
             
             # Check for special character introductions from config
-            special_intros = self.config.get('scene_management', {}).get('special_character_introductions', {})
+            special_intros = self.scene_management.get('special_character_introductions', {})
             if (char_type in special_intros and 
                 page_number == special_intros[char_type].get('page') and 
                 char_name not in self.existing_characters):
@@ -60,7 +76,7 @@ class SceneManager:
 
     def get_character_appearance_rules(self, character_name: str) -> dict:
         """Get character appearance rules from config."""
-        for char_type, char_data in self.config['characters'].items():
+        for char_type, char_data in self.characters.items():
             if char_data['name'] == character_name:
                 appearance_rules = {}
                 # Get appearance and features from character config
@@ -77,7 +93,7 @@ class SceneManager:
         """Get character action based on story progression."""
         story_phase = self._get_story_phase(page_number)
         
-        for char_type, char_info in self.config['characters'].items():
+        for char_type, char_info in self.characters.items():
             if char_info['name'] == character_name:
                 if story_phase in char_info.get('actions', {}):
                     return char_info['actions'][story_phase]
@@ -90,18 +106,24 @@ class SceneManager:
         if not scene_info:
             return {}
             
-        # Add character information
-        characters = self._get_required_characters(page_number, content_text)
-        if characters:
-            scene_info['characters'] = characters
-            # Fetch and add appearance rules for each character
-            char_rules = {}
-            for char_name in characters:
-                rules = self.get_character_appearance_rules(char_name)
-                if rules: # Only add if rules are found
-                    char_rules[char_name] = rules
-            if char_rules: # Only add the key if there are any rules
-                scene_info['character_appearance_rules'] = char_rules
+        # Add character information using the new method which returns full details
+        required_characters_details = self.get_required_characters(page_number, content_text)
+        if required_characters_details:
+            scene_info['characters'] = required_characters_details # Store the full details
+            
+            # Extract names just for logging if needed (optional)
+            # character_names = [char['name'] for char in required_characters_details]
+            # logger.debug(f"Characters for page {page_number}: {', '.join(character_names)}")
+
+            # REMOVE redundant fetching of appearance rules, as they are now 
+            # included in required_characters_details returned by get_required_characters.
+            # char_rules = {}
+            # for char_name in characters: # This 'characters' was previously just names
+            #     rules = self.get_character_appearance_rules(char_name)
+            #     if rules: # Only add if rules are found
+            #         char_rules[char_name] = rules
+            # if char_rules: # Only add the key if there are any rules
+            #     scene_info['character_appearance_rules'] = char_rules
             
         # Get transition requirements if not the first page
         if page_number > 1:
@@ -152,7 +174,7 @@ class SceneManager:
             return self.scene_cache[page_number].copy()
             
         # Find the phase for this page
-        for phase, info in self.config.get('story_progression', {}).get('phase_mapping', {}).items():
+        for phase, info in self.story_progression.get('phase_mapping', {}).items():
             if info.get('start_page') <= page_number <= info.get('end_page'):
                 scene_info = self.scene_progression.get(phase, {}).copy()
                 self.scene_cache[page_number] = scene_info
@@ -160,35 +182,40 @@ class SceneManager:
                 
         return {}
         
-    def _get_required_characters(self, page_number: int, content_text: str = None) -> list:
-        """Determine required characters for a page based on content and configuration."""
-        # Check cache first
-        if page_number in self.character_cache and not content_text:
-            return self.character_cache[page_number].copy()
-            
-        characters = []
+    def get_required_characters(self, page_number: int, content_text: str) -> List[dict]:
+        """Get required characters for the current page with full details."""
+        # (Note: content_text is currently unused in this logic but kept for potential future use)
+        required_characters = []
+        story_phase = self._get_story_phase(page_number) # Use internal method
         
-        # Get characters from scene progression
-        scene_info = self._get_base_scene_info(page_number)
-        if scene_characters := scene_info.get('characters', []):
-            characters.extend(scene_characters)
+        for char_type, char_info in self.characters.items():
+            intro_page = char_info.get('introduction', {}).get('page', 1)
+            if page_number < intro_page: continue
+                
+            has_action = char_info.get('actions', {}).get(story_phase) is not None
+            has_emotion = str(page_number) in char_info.get('emotional_states', {})
             
-        # Analyze content text if provided
-        if content_text:
-            # Get all character names from config
-            all_characters = self.config['characters'].keys()
-            
-            # Check for character mentions in content
-            for character in all_characters:
-                if character.lower() in content_text.lower():
-                    if character not in characters:
-                        characters.append(character)
-                        
-        # Cache result if no content text was used
-        if not content_text:
-            self.character_cache[page_number] = characters.copy()
-            
-        return characters
+            if has_action or has_emotion:
+                char_action = char_info.get('actions', {}).get(story_phase)
+                char_emotion = char_info.get('emotional_states', {}).get(str(page_number))
+                
+                include_reason = []
+                if has_action: include_reason.append(f"action for '{story_phase}'")
+                if has_emotion: include_reason.append(f"emotion for page {page_number}")
+                logger.debug(f"Including '{char_info['name']}' for page {page_number}: {', '.join(include_reason)}")
+
+                appearance = {attr: char_info[attr] for attr in ['appearance', 'outfit', 'features'] if attr in char_info}
+                
+                character = {
+                    'name': char_info['name'], 'type': char_type, 
+                    'description': char_info.get('description', ''),
+                    'action': char_action, 'emotion': char_emotion, **appearance
+                }
+                required_characters.append(character)
+        
+        char_names = [char['name'] for char in required_characters]
+        logger.info(f"Required characters for page {page_number}: {', '.join(char_names) if char_names else 'None'}")
+        return required_characters
         
     def _get_reference_page(self, page_number: int) -> Optional[int]:
         """Determine if a reference page should be used for this page."""
@@ -208,7 +235,7 @@ class SceneManager:
             prev_elements = set(prev_scene.get('elements', []))
             
             # Get similarity threshold from config
-            similarity_threshold = self.config.get('scene_management', {}).get('reference_page', {}).get('similarity_threshold', 0.7)
+            similarity_threshold = self.scene_management.get('reference_page', {}).get('similarity_threshold', 0.7)
             
             # If scenes share more than threshold elements, use as reference
             if len(current_elements & prev_elements) / len(current_elements | prev_elements) > similarity_threshold:
@@ -224,7 +251,7 @@ class SceneManager:
             logger.warning(f"Could not determine story phase for page {page_number}. Returning empty emotions.")
             return {}
             
-        phase_details = self.config.get('settings', {}).get('scene_progression', {}).get(story_phase, {})
+        phase_details = self.scene_progression.get(story_phase, {})
         
         # Extract the relevant keys
         emotion_data = {
@@ -249,52 +276,25 @@ class SceneManager:
         """Extract story-specific actions enriched with emotional states from config."""
         # Get the basic action from story beats
         story_phase = self._get_story_phase(page_number)
-        basic_action = self.config['story']['story_beats'].get(story_phase, '')
+        action = self.story_beats.get(story_phase, "")
         
-        # Construct enhanced action description with character emotions
+        # Get character emotions for the current page
         character_emotions = self.get_character_emotions(page_number)
-        if character_emotions:
-            character_emotion_texts = []
-            
-            # Add emotional state for all characters present on this page
-            for char_name, emotion in character_emotions.items():
-                char_emotion = f"{char_name} is {emotion}"
-                character_emotion_texts.append(char_emotion)
-            
-            # Combine with basic action
-            if character_emotion_texts:
-                emotionally_enhanced_action = basic_action + " " + " ".join(character_emotion_texts)
-                return emotionally_enhanced_action
         
-        return basic_action
+        # If there are emotional states, incorporate them
+        if character_emotions:
+            action += " while feeling " + " and ".join(character_emotions.values())
+        
+        return action
 
     def get_character_emotions(self, page_number: int) -> dict:
-        """Get character emotions for a specific page by retrieving them from 
-           each character's configuration in config['characters']."""
-        page_str = str(page_number)
-        character_emotions = {}
-        
-        # Get characters required for this page to avoid unnecessary lookups
-        # Note: This might require _get_required_characters to be efficient
-        #       or potentially passing the characters list as an argument.
-        #       For simplicity now, we iterate through all characters in config.
-        required_characters_on_page = self._get_required_characters(page_number)
-
-        for char_type, char_data in self.config.get('characters', {}).items():
-            char_name = char_data.get('name')
-            if not char_name or char_name not in required_characters_on_page:
-                continue # Skip if no name or not on this page
-                
-            # Get the emotional states defined for this character
-            emotional_states = char_data.get('emotional_states', {})
-            
-            # Check if an emotion is defined for the current page (using page number as string key)
-            if page_str in emotional_states:
-                character_emotions[char_name] = emotional_states[page_str]
-            # else: # Optionally log if no emotion is found for an active character
-            #    logger.debug(f"No specific emotion found for character '{char_name}' on page {page_number}.")
-
-        return character_emotions
+        """Get emotions for all characters present on a specific page."""
+        emotions = {}
+        for char_type, char_info in self.characters.items():
+            char_name = char_info['name']
+            if str(page_number) in char_info.get('emotional_states', {}):
+                emotions[char_name] = char_info['emotional_states'][str(page_number)]
+        return emotions
 
     def get_visual_transition(self, from_page: int, to_page: int) -> str:
         """Get visual transition between two pages."""
@@ -374,74 +374,83 @@ CHARACTER EMOTIONAL STATES:
         return guidance
 
     def _get_story_phase(self, page_number: int) -> str:
-        """Map page number to story phase using configuration."""
-        # Use phase mapping from config
-        phase_mapping = self.config.get('story_progression', {}).get('phase_mapping', {})
+        """Get the story phase for a given page number."""
+        for phase, info in self.story_progression.get('phase_mapping', {}).items():
+            if info.get('start_page') <= page_number <= info.get('end_page'):
+                return phase
         
-        # Log story phase lookup for debugging
-        logger.debug(f"Looking up story phase for page {page_number}")
+        # Check fallback phases
+        for phase, info in self.story_progression.get('fallback_phases', {}).items():
+            if page_number <= info.get('end_page'):
+                return phase
         
-        phase_found = None
+        # Return default phase if nothing else matches
+        return self.story_progression.get('default_phase', 'conclusion')
+
+    def find_reference_page(self, current_page_number: int, available_original_files: Dict[int, str]) -> Optional[int]:
+        """Find the most suitable reference image page for consistency.
         
-        if not phase_mapping:
-            # Use fallback mapping from config
-            fallback_mapping = self.config.get('scene_management', {}).get('story_phase_fallback', {})
+        Checks for character introduction pages first, then falls back to the most recent page.
+        Requires access to the currently available original image files.
+        
+        Args:
+            current_page_number: The page number for which a reference is needed.
+            available_original_files: A dictionary mapping page numbers to their saved original image file paths.
+                                       This comes from BookGenerator's state.
+                                       
+        Returns:
+            The page number of the best reference image, or None if none found.
+        """
+        # Filter available files to only include pages before the current one
+        valid_reference_pages = {p: path for p, path in available_original_files.items() if p < current_page_number}
+        
+        if not valid_reference_pages:
+            logger.info(f"No preceding pages with images found to use as reference for page {current_page_number}")
+            return None
+
+        # Sort available pages by number, descending (most recent first)
+        sorted_available_pages = sorted(valid_reference_pages.keys(), reverse=True)
+        
+        try:
+            # Get scene requirements to determine characters present on the current page
+            # Pass None for content_text as we only need character info here
+            scene_reqs = self.get_scene_requirements(current_page_number, None) 
             
-            if not fallback_mapping:
-                logger.warning("No phase mapping found in config, using hardcoded fallback mapping")
-                return 'conclusion'  # Last resort fallback
+            # Extract just the names of characters required for the current page
+            # Handle the case where scene_reqs['characters'] might be None or empty
+            current_char_details = scene_reqs.get('characters', [])
+            current_chars_names = [char['name'] for char in current_char_details] if current_char_details else []
             
-            # Find the phase for the current page number
-            for phase, page_range in fallback_mapping.items():
-                start_page = page_range.get('start_page', 1)
-                end_page = page_range.get('end_page', float('inf'))
+            intro_pages_with_images = []
+            if current_chars_names:
+                logger.debug(f"Checking intro pages for current characters: {current_chars_names}")
+                for char_name in current_chars_names:
+                    # Find the character type (key in self.characters dict) based on name
+                    char_type = next((ct for ct, cd in self.characters.items() if cd.get('name') == char_name), None)
+                    if char_type:
+                        intro_page = self.characters[char_type].get('introduction', {}).get('page')
+                        # Check if the intro page exists, is not the current page, and has an image file saved
+                        if intro_page and intro_page != current_page_number and intro_page in valid_reference_pages:
+                            intro_pages_with_images.append(intro_page)
+                            logger.debug(f"Found potential reference: Intro page {intro_page} for character '{char_name}'")
+
+            # If any relevant character intro pages with images were found, use the earliest one
+            if intro_pages_with_images:
+                earliest_intro_page = min(intro_pages_with_images)
+                logger.info(f"Using earliest character introduction page {earliest_intro_page} as reference for page {current_page_number}")
+                return earliest_intro_page
                 
-                if start_page <= page_number <= end_page:
-                    phase_found = phase
-                    break
-        
-        # Find the phase for the current page number from main phase mapping
-        if not phase_found:
-            for phase, page_range in phase_mapping.items():
-                start_page = page_range.get('start_page', 1)
-                end_page = page_range.get('end_page', 10)
-                
-                if start_page <= page_number <= end_page:
-                    phase_found = phase
-                    break
-        
-        # Return default phase from config if still not found
-        if not phase_found:
-            phase_found = self.config.get('scene_management', {}).get('default_phase', 'conclusion')
+        except Exception as e:
+             # Log the error but allow fallback to most recent page
+             logger.warning(f"Could not determine character introduction page for reference due to error: {e}. Falling back to most recent.")
+
+        # Fallback: If no intro pages found or error occurred, use the most recent available page
+        if sorted_available_pages:
+            most_recent_page = sorted_available_pages[0]
+            logger.info(f"Using most recent page {most_recent_page} as reference for page {current_page_number} (fallback)")
+            return most_recent_page
             
-        logger.info(f"Page {page_number} story phase: {phase_found}")
-        
-        # Log which characters are active in this phase
-        logger.info(f"=== CHARACTER ANALYSIS FOR PAGE {page_number} ===")
-        for char_type, char_info in self.config.get('characters', {}).items():
-            char_name = char_info.get('name', char_type)
-            intro_page = char_info.get('introduction', {}).get('page', 1)
-            
-            if page_number >= intro_page:
-                # Check if this character has actions for this phase
-                if phase_found in char_info.get('actions', {}):
-                    action = char_info['actions'][phase_found]
-                    emotion = char_info.get('emotional_states', {}).get(str(page_number), "No emotion specified")
-                    logger.info(f"  CHARACTER: {char_name} - ACTIVE for phase {phase_found}")
-                    logger.info(f"    Action: {action}")
-                    logger.info(f"    Emotion: {emotion}")
-                    
-                    # Check for identical actions/emotions that might cause duplication
-                    for other_char_type, other_char_info in self.config.get('characters', {}).items():
-                        if char_type != other_char_type and page_number >= other_char_info.get('introduction', {}).get('page', 1):
-                            if phase_found in other_char_info.get('actions', {}):
-                                other_action = other_char_info['actions'][phase_found]
-                                if action == other_action:
-                                    logger.warning(f"  DUPLICATE ACTION DETECTED: {char_name} and {other_char_info.get('name')} have identical actions!")
-                else:
-                    logger.info(f"  CHARACTER: {char_name} - No action for phase {phase_found}")
-            else:
-                logger.info(f"  CHARACTER: {char_name} - Not yet introduced (intro page: {intro_page})")
-        logger.info(f"=== END CHARACTER ANALYSIS ===")
-            
-        return phase_found 
+        # Should theoretically not be reached if valid_reference_pages was not empty initially,
+        # but added for completeness.
+        logger.info(f"Could not find any suitable reference page for page {current_page_number}")
+        return None

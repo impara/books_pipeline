@@ -2,13 +2,14 @@ import os
 import base64
 import json
 import requests
+import re
 from loguru import logger
 from typing import Dict, Any, Optional, Tuple, List
 from dotenv import load_dotenv
 
 class APIClient:
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize the API client with configuration."""
+    def __init__(self, generation_settings: Dict[str, Any]):
+        """Initialize the API client with generation-specific configuration."""
         # Load environment variables
         load_dotenv()
         
@@ -21,8 +22,8 @@ class APIClient:
         self.debug_enable_response = os.getenv('DEBUG_ENABLE_RESPONSE', 'true').lower() == 'true'
         self.debug_verbose_level = int(os.getenv('DEBUG_VERBOSE_LEVEL', '2'))
         
-        # Store config for later use
-        self.config = config
+        # Store generation-specific config for later use
+        self.generation_settings = generation_settings
         
         # Initialize API key
         self.api_key = self._initialize_api_key()
@@ -97,7 +98,6 @@ class APIClient:
             full_prompt = "\n".join(text_parts)
             
             # Find character count sections
-            import re
             char_count_match = re.search(r"TOTAL CHARACTERS: EXACTLY (\d+)", full_prompt)
             if char_count_match:
                 logger.info(f"Specified character count: {char_count_match.group(1)}")
@@ -205,13 +205,14 @@ class APIClient:
 
     def get_generation_config(self, temperature: float = 0.7, seed: Optional[int] = None) -> Dict[str, Any]:
         """Get generation configuration."""
-        config = self.config.get('generation', {}).get('config', {})
+        # Use the stored generation_settings 
+        gen_config_section = self.generation_settings.get('config', {})
         
         generation_config = {
             "temperature": temperature,
-            "topP": config.get('top_p', 0.9),
-            "topK": config.get('top_k', 40),
-            "maxOutputTokens": config.get('max_output_tokens', 8192),
+            "topP": gen_config_section.get('top_p', 0.9),
+            "topK": gen_config_section.get('top_k', 40),
+            "maxOutputTokens": gen_config_section.get('max_output_tokens', 8192),
         }
         
         if seed is not None:
@@ -226,11 +227,101 @@ class APIClient:
         
         return generation_config 
 
-    def generate_story_text(self, prompt: str, conversation_history: Optional[list] = None) -> Tuple[str, bool]:
-        """Generate story text using the API.
+    def _extract_story_text_from_response(self, full_text: str, page_number: Optional[int] = None) -> str:
+        """Extract just the story text from the full API response using heuristics."""
+        # Heuristic 1: Check for specific markers
+        if "TEXT START" in full_text and "TEXT END" in full_text:
+            start_idx = full_text.find("TEXT START") + len("TEXT START")
+            end_idx = full_text.find("TEXT END")
+            if start_idx < end_idx:
+                extracted_text = full_text[start_idx:end_idx].strip()
+                if extracted_text: 
+                    logger.debug(f"Extracted text using START/END markers (Page {page_number or 'N/A'}).")
+                    return extracted_text
+
+        lines = full_text.split('\\n')
+        story_lines = []
+        in_story_section = False
+
+        # Heuristic 2: Look for lines after "text:" marker
+        for line in lines:
+            line_lower = line.strip().lower()
+            if not line_lower: continue
+            # Allow variations like "Story Text:" or "Page Text:"
+            if any(marker in line_lower for marker in ["text:", "story text:", "page text:"]):
+                in_story_section = True
+                # Check if the text follows immediately on the same line after the marker
+                marker_pos = -1
+                for marker in ["text:", "story text:", "page text:"]:
+                    if marker in line_lower:
+                        marker_pos = line_lower.find(marker) + len(marker)
+                        break
+                if marker_pos != -1 and len(line) > marker_pos:
+                    potential_text = line[marker_pos:].strip()
+                    if potential_text:
+                       story_lines.append(potential_text)
+                continue # Move to the next line after finding the marker
+
+            # Stop if we hit common markers indicating the end of the story part
+            if any(stop_marker in line_lower for stop_marker in ["illustration:", "image prompt:", "visual description:", "scene description:"]):
+                 # If we were in a story section, stop collecting
+                 if in_story_section:
+                     break 
+                 # Otherwise, continue scanning in case the text marker appears later
+
+            if in_story_section: 
+                story_lines.append(line.strip())
+
+        if story_lines:
+            logger.debug(f"Extracted text using 'text:' marker heuristic (Page {page_number or 'N/A'}).")
+            return "\\n".join(story_lines).strip()
+
+        # Heuristic 3: Try lines enclosed in double quotes
+        quoted_lines = [l.strip().strip('"') for l in lines if l.strip().count('"') >= 2 and len(l.strip()) > 2]
+        if quoted_lines:
+             # Filter out potential non-story quoted lines (like settings)
+             filtered_quoted_lines = [ql for ql in quoted_lines if ':' not in ql and not ql.lower().startswith(("scene:", "character:", "setting:"))]
+             if filtered_quoted_lines:
+                 logger.debug(f"Extracted text using quote heuristic (Page {page_number or 'N/A'}).")
+                 return "\\n".join(filtered_quoted_lines).strip()
+
+
+        # Heuristic 4: Try lines after a page header (if page_number provided)
+        if page_number is not None:
+            page_marker_found_idx = -1
+            for i, line in enumerate(lines):
+                # Look for "page X" or "Page X" at the start or end of a line
+                if re.search(rf'(^|\s)page {page_number}(\s|$)', line.lower()):
+                    page_marker_found_idx = i
+                    break
+            
+            if page_marker_found_idx != -1:
+                # Look for plausible story lines in the next few lines
+                candidate_lines = [l.strip() for l in lines[page_marker_found_idx+1 : page_marker_found_idx+6] 
+                                   if l.strip() and 
+                                   not l.startswith(('#', '**', '-')) and 
+                                   ':' not in l and
+                                   len(l.split()) > 2] # Avoid single-word lines or very short lines
+                if candidate_lines:
+                    logger.debug(f"Extracted text using page header heuristic (Page {page_number}).")
+                    # Join first few plausible lines, but limit length
+                    return "\\n".join(candidate_lines[:3]).strip() 
+
+        # Fallback: Return the first 3 non-empty, non-heading lines if specific markers fail
+        fallback_lines = [l.strip() for l in lines if l.strip() and not l.startswith(('#', '**', '-')) and ':' not in l][:3]
+        if fallback_lines:
+            logger.warning(f"Using fallback extraction (first 3 non-empty lines) for page {page_number or 'N/A'}.")
+            return "\\n".join(fallback_lines).strip()
+
+        # Ultimate fallback: Return the original text if no heuristics worked
+        logger.error(f"Failed to extract structured story text for page {page_number or 'N/A'}. Returning full response.")
+        return full_text.strip()
+
+    def generate_story_text(self, prompt: str, conversation_history: Optional[list] = None, page_number: Optional[int] = None, temperature: Optional[float] = None) -> Tuple[str, bool]:
+        """Generate story text using the API and extract the narrative part.
         
         Returns:
-            Tuple[str, bool]: (generated_text, success)
+            Tuple[str, bool]: (extracted_story_text, success)
         """
         # Use conversation history for context if available
         generation_input = conversation_history.copy() if conversation_history else []
@@ -239,23 +330,39 @@ class APIClient:
         # Prepare the request data
         data = {
             "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}]
-                }
+                {"role": "user", "parts": [{"text": p}]} if i % 2 == 0 else {"role": "model", "parts": [{"text": p}]}
+                for i, p in enumerate(generation_input)
             ],
-            "generationConfig": self.get_generation_config()
+            "generationConfig": self.get_generation_config(temperature=temperature if temperature is not None else 0.7), # Use provided temp or default
+            "safetySettings": self.safety_settings
         }
         
-        # Make the API request
-        url = self.get_api_url()
-        response = self.make_request(url, data)
-        
-        # Extract text from response
-        if response and 'candidates' in response and response['candidates']:
-            text_content = response['candidates'][0]['content']['parts'][0]['text'].strip()
-            return text_content, True
-        else:
+        try:
+            # Make the API request
+            api_url = self.get_api_url()
+            response_json = self.make_request(api_url, data)
+            
+            # Extract text from the response
+            if 'candidates' in response_json and len(response_json['candidates']) > 0:
+                candidate = response_json['candidates'][0]
+                if 'content' in candidate and 'parts' in candidate['content'] and len(candidate['content']['parts']) > 0:
+                    full_text_response = candidate['content']['parts'][0].get('text', '')
+                    if full_text_response:
+                        # Extract the story text using the new helper method
+                        extracted_text = self._extract_story_text_from_response(full_text_response, page_number)
+                        return extracted_text, True
+                    else:
+                        logger.error("API response candidate part contained no text.")
+                        return "", False
+                else:
+                     logger.error("API response candidate structure invalid (missing content/parts).")
+                     return "", False
+            else:
+                logger.error("API response did not contain valid candidates.")
+                return "", False
+
+        except Exception as e:
+            logger.error(f"Error during text generation API call or processing: {str(e)}")
             return "", False
 
     def generate_backup_story(self, prompt: str, temperature: float = 0.7) -> Tuple[str, bool]:
@@ -298,7 +405,7 @@ class APIClient:
             scene_requirements: Optional dictionary containing scene details, including potential reference_override rules.
             
         Returns:
-            List of base64-encoded image strings, or None if generation fails.
+            Optional[List[str]]: List of base64 encoded image strings, or None on failure.
         """
         logger.info(f"Generating image (Page: {page_number if page_number is not None else 'N/A'}) - Ref Image: {'Yes' if reference_image_b64 else 'No'}")
 

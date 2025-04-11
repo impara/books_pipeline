@@ -1,21 +1,36 @@
 from loguru import logger
 from typing import List, Dict, Optional, Tuple
+import base64
+import os
 
-# Assuming SceneManager is appropriately imported or defined if needed elsewhere
-# from .scene_manager import SceneManager 
+# Assuming SceneManager and TransitionManager are appropriately imported or defined
+from .scene_manager import SceneManager 
+from .transition_manager import TransitionManager
 
 class PromptManager:
     """Manages the generation of prompts for text and image generation."""
 
-    def __init__(self, config: Dict, scene_manager):
-        """Initialize the PromptManager."""
-        self.config = config
+    def __init__(self, 
+                 book_config: dict,
+                 characters_config: dict,
+                 generation_config: dict,
+                 image_settings: dict,
+                 cover_config: dict,
+                 metadata_config: dict,
+                 scene_manager: SceneManager, # Added type hint
+                 transition_manager: TransitionManager): # Added TransitionManager
+        """Initialize the PromptManager with specific configs and managers."""
+        # Store specific config sections
+        self.book_config = book_config
+        self.characters_config = characters_config
+        self.generation_config = generation_config
+        self.image_settings = image_settings
+        self.cover_config = cover_config
+        self.metadata_config = metadata_config
+        
+        # Store injected managers
         self.scene_manager = scene_manager
-        # Store relevant sub-configs for easier access
-        self.book_config = self.config.get('book', {})
-        self.characters_config = self.config.get('characters', {})
-        self.generation_config = self.config.get('generation', {})
-        self.image_settings = self.config.get('image_settings', {})
+        self.transition_manager = transition_manager # Store transition manager
 
     # --- Text Prompt Generation --- #
 
@@ -174,22 +189,91 @@ class PromptManager:
 
     # --- Image Prompt Generation --- #
 
-    def generate_image_prompt(self, page_number: int, content_text: str, 
-                              scene_requirements: Dict, required_characters: List[Dict], 
-                              transition_requirements: Dict) -> str:
-        """Generate the final prompt text for image generation."""
+    def generate_image_prompt(self, 
+                              page_number: int, 
+                              story_text: str, 
+                              scene_requirements: Dict, 
+                              required_characters: List[Dict], 
+                              reference_page_num: Optional[int], # Changed from transition_requirements
+                              original_image_files: Dict[int, str] # Added original files dict
+                              ) -> str:
+        """Generate the final prompt string for image generation, incorporating reference image if applicable."""
         
+        # Build the core prompt parts (scene, characters, rules, style)
+        prompt_parts = self._build_core_image_prompt(page_number, story_text, scene_requirements, required_characters)
+        
+        # --- Handle Reference Image and Guidance --- #
+        reference_image_part = None
+        reference_guidance_part = None
+        
+        if reference_page_num:
+            ref_image_path_str = original_image_files.get(reference_page_num)
+            if ref_image_path_str and os.path.exists(ref_image_path_str):
+                try:
+                    # Load and encode image
+                    with open(ref_image_path_str, 'rb') as f: image_data = f.read()
+                    image_base64 = base64.b64encode(image_data).decode('utf-8')
+                    
+                    # Get reference handling guidance from TransitionManager
+                    reference_handling = self.transition_manager.get_reference_handling(page_number, reference_page_num)
+                    
+                    # Format guidance text
+                    guidance_lines = ["REFERENCE IMAGE GUIDANCE:"]
+                    if maintain := reference_handling.get('maintain'): guidance_lines.extend([f"- Maintain: {item}" for item in maintain])
+                    if adapt := reference_handling.get('adapt'): guidance_lines.extend([f"- Adapt: {item}" for item in adapt])
+                    if ignore := reference_handling.get('ignore'): guidance_lines.extend([f"- Ignore: {item}" for item in ignore])
+                    
+                    # Create prompt parts for reference image and guidance
+                    reference_guidance_part = "\n".join(guidance_lines)
+                    reference_image_part = { # Store as dict for later processing if needed, though APIClient expects string now
+                        "inlineData": {"mimeType": "image/png", "data": image_base64}
+                    }
+                    logger.info(f"Successfully added reference image from page {reference_page_num} and guidance to prompt for page {page_number}")
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing reference image from {ref_image_path_str}: {str(e)}")
+            else:
+                logger.warning(f"Reference image path for page {reference_page_num} not found or invalid.")
+
+        # --- Assemble Final Prompt --- #
+        # Insert reference guidance *before* critical requirements if it exists
+        if reference_guidance_part:
+            # Find the index of the critical requirements header
+            try:
+                critical_req_index = prompt_parts.index("CRITICAL REQUIREMENTS (FOLLOW THESE EXACTLY):")
+                # Insert reference guidance and a separator before it
+                prompt_parts.insert(critical_req_index, "") # Separator
+                prompt_parts.insert(critical_req_index + 1, reference_guidance_part)
+                prompt_parts.insert(critical_req_index + 2, "\n**CRITICAL CONSISTENCY NOTE:** Use text rules (marked 'ALWAYS') as primary source for appearance. Use reference image mainly for style, palette, placement. TEXT RULES OVERRIDE IMAGE CONFLICTS.")
+                prompt_parts.insert(critical_req_index + 3, "") # Separator
+            except ValueError:
+                logger.warning("Could not find 'CRITICAL REQUIREMENTS' header to insert reference guidance before.")
+                # Append at the end as a fallback
+                prompt_parts.extend(["", reference_guidance_part, "\n**CRITICAL CONSISTENCY NOTE:** Use text rules (marked 'ALWAYS') as primary source for appearance. Use reference image mainly for style, palette, placement. TEXT RULES OVERRIDE IMAGE CONFLICTS."])
+
+        # NOTE: The actual image data (reference_image_part) is NOT added to the text prompt string here.
+        # The APIClient.generate_image method handles sending the reference_image_b64 separately.
+        # This method now focuses on generating the *textual* part of the prompt, including guidance.
+
+        final_prompt_string = "\n".join(prompt_parts)
+        logger.debug(f"Final image prompt text for page {page_number}: {final_prompt_string[:500]}...")
+        
+        return final_prompt_string
+
+    def _build_core_image_prompt(self, page_number: int, story_text: str, 
+                                 scene_requirements: Dict, required_characters: List[Dict]) -> List[str]:
+        """Builds the main list of prompt parts excluding reference image handling."""
         # Get required components
-        scene_analysis = self._create_scene_analysis(required_characters, scene_requirements, content_text)
+        scene_analysis = self._create_scene_analysis(required_characters, scene_requirements, story_text)
         character_instructions = self._build_character_instructions(required_characters, scene_requirements)
         anti_duplication_rules = self._get_anti_duplication_rules(len(required_characters), required_characters)
         generation_steps = self._get_generation_steps()
         art_style_guidance = self._get_art_style_guidance()
-        
-        # Build the main prompt parts
+
+        # Build the main prompt parts list
         prompt_parts = [
             f"PROMPT TYPE: Children's book illustration for page {page_number}",
-            f"TEXT CONTEXT: \"{content_text}\"", # Provide text for context
+            f"TEXT CONTEXT: \"{story_text}\"",
             "",
             f"SCENE ANALYSIS:",
             scene_analysis,
@@ -200,37 +284,14 @@ class PromptManager:
             character_instructions,
             "",
             anti_duplication_rules,
-        ]
-
-        # Add Transition Guidance if available
-        if transition_requirements:
-            prompt_parts.extend([
-                "",
-                "TRANSITION GUIDANCE (from previous page):"
-            ])
-            for key, value in transition_requirements.items():
-                if isinstance(value, list):
-                    prompt_parts.append(f"- {key.replace('_', ' ').title()}: {', '.join(value) if value else 'None'}")
-                elif isinstance(value, dict):
-                    prompt_parts.append(f"- {key.replace('_', ' ').title()}:")
-                    for sub_key, sub_value in value.items():
-                        prompt_parts.append(f"  - {sub_key.replace('_', ' ').title()}: {sub_value}")
-                else:
-                    prompt_parts.append(f"- {key.replace('_', ' ').title()}: {value}")
-
-        prompt_parts.extend([
             "",
             "GENERATION STEPS:",
             generation_steps,
             "",
             "ART STYLE:",
-            *art_style_guidance # Unpack the list
-        ])
-        
-        final_prompt = "\n".join(prompt_parts)
-        logger.debug(f"Final image prompt for page {page_number}: {final_prompt[:500]}...") # Log truncated prompt
-        
-        return final_prompt
+            *art_style_guidance
+        ]
+        return prompt_parts
 
     def _create_scene_analysis(self, required_characters: List[dict], scene_requirements: dict, 
                                content_text: str) -> str: # Removed story_actions as it was empty
@@ -307,12 +368,13 @@ class PromptManager:
         return "\n\n".join(instructions)
 
     def _get_anti_duplication_rules(self, num_characters: int, required_characters: Optional[List[dict]] = None) -> str:
-        """Get anti-duplication rules from config and format them."""
-        anti_dup_config = self.generation_config.get('anti_duplication_rules', {})
-        rules = anti_dup_config.get('rules', [])
-        consistency = anti_dup_config.get('consistency_rules', [])
-        flexibility = anti_dup_config.get('flexibility_rules', [])
-        verification = anti_dup_config.get('verification_rules', [])
+        """Get anti-duplication rules from generation config."""
+        # Use self.generation_config
+        rules_config = self.generation_config.get('anti_duplication_rules', {})
+        rules = rules_config.get('rules', [])
+        consistency = rules_config.get('consistency_rules', [])
+        flexibility = rules_config.get('flexibility_rules', [])
+        verification = rules_config.get('verification_rules', [])
         
         characters_text = []
         if required_characters:
@@ -344,81 +406,109 @@ class PromptManager:
         return "\n".join(formatted_rules)
 
     def _get_generation_steps(self) -> str:
-        """Get generation steps from config or use defaults."""
-        steps_list = self.generation_config.get('steps', [
-            "Create the scene background based on requirements.",
-            "Leave the scene EMPTY of characters initially.",
-            "Add EACH character ONE at a time, ensuring NO duplication occurs.",
-            "Position characters to clearly depict the story actions."
+        """Get generation steps from generation config."""
+        # Use self.generation_config
+        steps = self.generation_config.get('steps', [
+            "Analyze scene requirements.",
+            "Place characters according to instructions.",
+            "Ensure character appearance consistency.",
+            "Render image in the specified art style."
         ])
-        formatted_steps = "SEQUENTIAL GENERATION PLAN:"
-        for i, step in enumerate(steps_list, 1):
-            formatted_steps += f"\nStep {i}: {step}"
-        return formatted_steps
+        return "\n".join([f"- {step}" for step in steps])
 
     def _get_art_style_guidance(self) -> List[str]:
-        """Get art style guidance from config."""
+        """Get art style guidance from generation and image settings config."""
+        # Use self.generation_config and self.image_settings
         art_style_config = self.generation_config.get('art_style', {})
-        width = self.image_settings.get('width', 1024)
-        height = self.image_settings.get('height', 1024)
-        return [
-            f"- Tone: {art_style_config.get('tone', 'Child-friendly')}",
-            f"- Quality: {art_style_config.get('quality', 'High detail')}",
-            f"- Policy: {art_style_config.get('text_policy', 'NO text in image')}",
-            f"- Format: {art_style_config.get('format', 'SQUARE image ({width}x{height} pixels)').format(width=width, height=height)}",
+        guidance = [
+            f"- Overall Style: {self.book_config.get('art_style', 'Not specified')}", # Get base style from book config
+            f"- Tone: {art_style_config.get('tone', 'Bright, child-friendly')}",
+            f"- Quality: {art_style_config.get('quality', 'High detail, clean lines')}",
+            f"- Text Policy: {art_style_config.get('text_policy', 'NO text elements in the image')}",
+            f"- Format: {art_style_config.get('format', 'SQUARE image ({width}x{height} pixels)').format(width=self.image_settings.get('width', 1024), height=self.image_settings.get('height', 1024))}"
         ]
+        return guidance
 
     # --- Cover Prompt Generation --- #
 
     def generate_cover_prompt(self) -> Tuple[str, str]:
-        """Generate the prompt text components for the cover image."""
-        cover_config = self.config.get('cover', {})
+        """Generates the prompt for the cover image and the text for overlay."""
         
-        # Use defaults if not specified
-        prompt_template = cover_config.get('cover_prompt_template', "A vibrant book cover for '{title}'")
-        title = cover_config.get('cover_title') or self.book_config.get('title', 'My Book')
-        author = cover_config.get('cover_author', 'Generated by AI')
-        theme = self.book_config.get('theme', "a children's story")
-        art_style = self.book_config.get('art_style', 'illustration')
-        characters_list = [c.get('name', f'Character {i+1}') for i, c in enumerate(self.characters_config.values())]
-        characters = ", ".join(characters_list) if characters_list else "the main character"
-
-        # Format the base prompt
-        base_prompt = prompt_template.format(
-            title=title, 
-            characters=characters, # Keep names here for template compatibility
-            theme=theme, 
-            art_style=art_style,
-            author=author
-        )
+        # Use specific config sections directly
+        template = self.cover_config.get('cover_prompt_template', 
+                                       "Children's book cover for '{title}'. Theme: {theme}. Art style: {art_style}. Featuring {characters}. NO text in the image.")
+        characters_on_cover_names = self.cover_config.get('characters_on_cover', []) # Get names from cover config
         
-        # Add Detailed Character Descriptions for Cover
-        cover_char_details = self._build_cover_character_details(characters_list)
+        # Build character details string based on names
+        character_details_str = self._build_cover_character_details(characters_on_cover_names)
         
-        # Combine into final prompt text
-        # Note: The API client might handle combining text and reference image
-        full_prompt_text = f"{base_prompt}\n\n{cover_char_details}\n\n**CONSISTENCY:** Ensure characters match details & reference style."
-
-        logger.info(f"Cover prompt (base): {base_prompt}")
-        logger.info(f"Cover character details added: {cover_char_details}")
+        # Prepare context for the template
+        context = {
+            'title': self.book_config.get('title', 'My Book'),
+            'theme': self.book_config.get('theme', 'Adventure'),
+            'art_style': self.book_config.get('art_style', 'Whimsical'),
+            'characters': character_details_str or "main characters"
+        }
         
-        # Return the full text and the cover text separately for overlay
-        cover_text_for_overlay = f"{title}\n{author}"
-        return full_prompt_text, cover_text_for_overlay
+        full_prompt = template.format(**context)
+        
+        # Prepare text for overlay
+        title = self.cover_config.get('cover_title') or self.book_config.get('title', 'My Book')
+        author = self.cover_config.get('cover_author') or self.metadata_config.get('author') or 'Generated by AI'
+        cover_text = f"{title}\n{author}"
+        
+        logger.info("Generated cover prompt and text overlay content.")
+        return full_prompt, cover_text
 
     def _build_cover_character_details(self, characters_list: List[str]) -> str:
-        """Builds the character details string specifically for the cover prompt."""
-        details_list = ["CHARACTER DETAILS (MUST FOLLOW):"]
-        for char_name in characters_list:
-            char_config = next((cd for cd in self.characters_config.values() if cd.get('name') == char_name), None)
-            if char_config:
-                details = [f"- {char_name}:"]
-                if appearance := char_config.get('appearance'):
-                    details.append(f"  - Appearance: {appearance}")
-                if outfit := char_config.get('outfit'):
-                    details.append(f"  - Outfit: {outfit}")
-                if features := char_config.get('features'):
-                    details.append(f"  - Features: {features}")
-                if details:
-                     details_list.append("\n".join(details))
-        return "\n".join(details_list) 
+        """Build a string describing characters for the cover prompt."""
+        details = []
+        if not characters_list: # If list is empty, try to use first main character
+            main_char_key = next(iter(self.characters_config), None)
+            if main_char_key:
+                 char_info = self.characters_config[main_char_key]
+                 details.append(f"{char_info.get('name', 'the main character')} ({char_info.get('appearance', '')}, {char_info.get('outfit', '')})")
+            else:
+                 return "the main characters" # Fallback if no characters defined at all
+        else:
+            for char_name in characters_list:
+                # Find the character info by name
+                char_info = next((info for info in self.characters_config.values() if info.get('name') == char_name), None)
+                if char_info:
+                    details.append(f"{char_name} ({char_info.get('appearance', '')}, {char_info.get('outfit', '')})")
+                else:
+                    details.append(char_name) # Append name if details not found
+                    
+        return ", ".join(details) 
+
+    # --- Backup Text Prompt Generation --- #
+
+    def generate_backup_text_prompt(self, page_number: int, context_text: str, previous_descriptions: Dict[int, str]) -> str:
+        """Generate a prompt specifically for creating backup story text when extraction fails or is too short."""
+        
+        # Get previous page context
+        prev_context_str = ""
+        if page_number > 1 and (page_number - 1) in previous_descriptions:
+            prev_context_str = f"Previous page story: {previous_descriptions[page_number - 1]}"
+        else:
+            prev_context_str = "This is the first page."
+            
+        # Format the problematic context text
+        orig_context_str = f"The previous attempt resulted in very short or unusable text: \"{context_text[:200]}{'...' if len(context_text) > 200 else ''}\""
+
+        book_title = self.book_config.get('title', 'Untitled Book')
+
+        prompt = f"""\nTASK: Rewrite story text for page {page_number} of the children's book "{book_title}".
+        
+CONTEXT:
+- {prev_context_str}
+- {orig_context_str}
+
+INSTRUCTIONS:
+- Write 2-3 engaging, child-friendly sentences ONLY for page {page_number}.
+- Ensure the text is consistent with the previous page context and book theme.
+- The text should be suitable for illustration, describing character actions or advancing the plot.
+- **CRITICAL:** ONLY provide the story text for the page. Do NOT include any labels, headings (like 'TEXT:' or 'Page {page_number}:'), or explanations.
+"""
+        logger.debug(f"Generated backup text prompt for page {page_number}")
+        return prompt 
