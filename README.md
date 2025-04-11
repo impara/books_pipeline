@@ -69,7 +69,7 @@ Alternatively, you can set the API key directly in `config.yaml`
 1. Run the book generation script:
 
 ```bash
-python generate_book.py
+python -m src.generate_book
 ```
 
 2. The script will:
@@ -97,13 +97,13 @@ python generate_book.py
 - Regenerate specific pages:
 
 ```bash
-python generate_book.py --regenerate 1,2,3
+python -m src.generate_book --regenerate 1,2,3
 ```
 
 - Apply text overlay to existing images:
 
 ```bash
-python generate_book.py --apply-text [position] [page]
+python -m src.generate_book --apply-text [position] [page]
 ```
 
 - `position` can be "top", "middle", or "bottom" (default: bottom)
@@ -112,7 +112,7 @@ python generate_book.py --apply-text [position] [page]
 - Auto-retry on rate limits:
 
 ```bash
-python generate_book.py --retry
+python -m src.generate_book --retry
 ```
 
 ## Configuration
@@ -130,18 +130,24 @@ Edit `config.yaml` to customize:
 
 ## Project Structure
 
-- `generate_book.py`: Main script for book generation
-- `text_overlay_manager.py`: Handles text overlay application
-- `scene_manager.py`: Manages scene consistency and character rules
-- `transition_manager.py`: Ensures smooth story transitions between pages
-- `book_formatter.py`: Generates different book formats (PDF, EPUB, HTML)
-- `api_client.py`: Handles API communication with Gemini
-- `checkpoint_manager.py`: Handles saving and loading generation progress
-- `assets/fonts/`: Directory for required fonts
-- `outputs/`: Contains all generated content
-  - `page_XX/`: Individual page directories
-  - `processed_book/`: Final processed book in multiple formats
-- `checkpoints/`: Stores generation checkpoints for recovery
+- `src/`: Contains all the core Python modules.
+  - `__init__.py`: Marks the directory as a Python package.
+  - `generate_book.py`: Main script for book generation.
+  - `text_overlay_manager.py`: Handles text overlay application.
+  - `scene_manager.py`: Manages scene consistency and character rules.
+  - `transition_manager.py`: Ensures smooth story transitions between pages.
+  - `book_formatter.py`: Generates different book formats (PDF, EPUB, HTML).
+  - `api_client.py`: Handles API communication with Gemini.
+  - `checkpoint_manager.py`: Handles saving and loading generation progress.
+- `config.yaml`: Configuration file for the book and API settings.
+- `assets/fonts/`: Directory for required fonts.
+- `outputs/`: Contains all generated content.
+  - `page_XX/`: Individual page directories.
+  - `processed_book/`: Final processed book in multiple formats.
+- `checkpoints/`: Stores generation checkpoints for recovery.
+- `requirements.txt`: Lists Python dependencies.
+- `.env`: Environment variables (API key).
+- `README.md`: This file.
 
 ## Contributing
 

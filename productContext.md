@@ -20,11 +20,11 @@ The core problem this project addresses is the time-consuming and potentially co
   - HTML (for web viewing)
   - Plain Text (for accessibility)
 - **Pipeline Management:**
-  - **Scene Management:** Ensures consistency in characters and settings across different scenes/pages.
-  - **Transition Management:** Helps create smooth narrative transitions between pages.
-  - **Checkpointing:** Saves generation progress, allowing users to resume or recover from interruptions.
-  - **Error Handling:** Includes mechanisms to handle potential errors during API calls or processing, including retry logic for rate limits.
-  - **Page Regeneration:** Allows users to regenerate specific pages if needed.
+  - **Scene Management:** Ensures consistency in characters and settings across different scenes/pages (managed by `src/scene_manager.py`).
+  - **Transition Management:** Helps create smooth narrative transitions between pages (managed by `src/transition_manager.py`).
+  - **Checkpointing:** Saves generation progress, allowing users to resume or recover from interruptions (managed by `src/checkpoint_manager.py`).
+  - **Error Handling:** Includes mechanisms to handle potential errors during API calls or processing, including retry logic for rate limits (part of `src/generate_book.py` and `src/api_client.py`).
+  - **Page Regeneration:** Allows users to regenerate specific pages if needed (handled in `src/generate_book.py`).
 - **Structured Output:** Organizes generated assets (original images, text-overlaid images, story text per page, final book formats, logs) into a clear directory structure.
 
 ## Intended Users

@@ -9,12 +9,12 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
 import argparse
-from text_overlay_manager import TextOverlayManager
-from scene_manager import SceneManager
-from checkpoint_manager import CheckpointManager
-from api_client import APIClient
+from .text_overlay_manager import TextOverlayManager
+from .scene_manager import SceneManager
+from .checkpoint_manager import CheckpointManager
+from .api_client import APIClient
 from typing import Optional, List, Dict, Any
-from book_formatter import BookFormatter
+from .book_formatter import BookFormatter
 
 # Load environment variables
 load_dotenv()

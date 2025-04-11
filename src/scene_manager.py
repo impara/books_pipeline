@@ -1,7 +1,8 @@
+from pathlib import Path
 from loguru import logger
 import yaml
 from typing import Dict, Optional
-from transition_manager import TransitionManager
+from .transition_manager import TransitionManager
 
 class SceneManager:
     def __init__(self, config: dict):

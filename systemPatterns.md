@@ -6,13 +6,13 @@ The system employs a **Monolithic Script-Based Pipeline** architecture. The core
 
 ## Key Components & Modules
 
-- **`generate_book.py`**: Main entry point and orchestrator of the generation pipeline.
-- **`api_client.py`**: Handles all communication with the external Google Gemini API for text and image generation.
-- **`text_overlay_manager.py`**: Responsible for applying generated text onto the generated images using specified fonts and positioning.
-- **`scene_manager.py`**: Manages rules and consistency for characters and scenes across the book's pages.
-- **`transition_manager.py`**: Focuses on ensuring logical and smooth narrative transitions between consecutive pages.
-- **`book_formatter.py`**: Takes the generated assets (text, images) and formats them into various output files (PDF, EPUB, HTML, TXT).
-- **`checkpoint_manager.py`**: Implements the saving and loading of generation progress to allow for resumption.
+- **`src/generate_book.py`**: Main entry point and orchestrator of the generation pipeline.
+- **`src/api_client.py`**: Handles all communication with the external Google Gemini API for text and image generation.
+- **`src/text_overlay_manager.py`**: Responsible for applying generated text onto the generated images using specified fonts and positioning.
+- **`src/scene_manager.py`**: Manages rules and consistency for characters and scenes across the book's pages.
+- **`src/transition_manager.py`**: Focuses on ensuring logical and smooth narrative transitions between consecutive pages.
+- **`src/book_formatter.py`**: Takes the generated assets (text, images) and formats them into various output files (PDF, EPUB, HTML, TXT).
+- **`src/checkpoint_manager.py`**: Implements the saving and loading of generation progress to allow for resumption.
 - **`config.yaml`**: Central configuration file defining book parameters, API settings, and other options.
 
 ## Design Patterns
